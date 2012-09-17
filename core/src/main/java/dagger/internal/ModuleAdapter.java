@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 Square, Inc.
+ * Copyright (C) 2012 Google, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
  */
 package dagger.internal;
 
+
+import dagger.Element;
 import dagger.Module;
 import dagger.ObjectGraph;
 import dagger.Provides;
@@ -129,17 +132,32 @@ public abstract class ModuleAdapter<T> {
       // Fall back to runtime reflection.
       for (Class<?> c = moduleClass; c != Object.class; c = c.getSuperclass()) {
         for (Method method : c.getDeclaredMethods()) {
-          if (!method.isAnnotationPresent(Provides.class)) {
-            continue;
+          if (method.isAnnotationPresent(Provides.class)) {
+            String methodKey = Keys.get(method.getGenericReturnType(), method.getAnnotations(), method);
+            if (method.isAnnotationPresent(Element.class)) {
+              String elementKey = Keys.getElementKey(method.getGenericReturnType(),
+                  method.getAnnotations(), method);
+              SetBinding<?> elementBinding = (SetBinding<?>) bindings.get(elementKey);
+              if (elementBinding == null) {
+                elementBinding = createSetBinding(elementKey);
+                bindings.put(elementBinding.provideKey, elementBinding);
+              }
+              elementBinding.add(Linker.scope(createUnitaryBinding(methodKey, method)));
+            //} else if (method.isAnnotationPresent(Entry.class)) {
+            // TODO(cgruber): Map Binding
+            } else {
+              bindings.put(methodKey, createUnitaryBinding(methodKey, method));
+            }
           }
-          Binding<?> binding = methodToBinding(method);
-          bindings.put(binding.provideKey, binding);
         }
       }
     }
 
-    private <T> Binding<T> methodToBinding(Method method) {
-      String key = Keys.get(method.getGenericReturnType(), method.getAnnotations(), method);
+    private <T> SetBinding<T> createSetBinding(String key) {
+      return new SetBinding<T>(key);
+    }
+
+    private <T> ProviderMethodBinding<T> createUnitaryBinding(String key, Method method) {
       return new ProviderMethodBinding<T>(method, key, module);
     }
 
