@@ -36,6 +36,7 @@
     <module>compiler</module>
     <module>core</module>
     <module>example</module>
+    <module>integrations/web</module>
   </modules>
 
   <properties>
