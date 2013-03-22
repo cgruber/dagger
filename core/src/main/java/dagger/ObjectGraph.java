@@ -28,6 +28,7 @@ import dagger.internal.ThrowingErrorHandler;
 import dagger.internal.UniqueMap;
 import dagger.internal.plugins.loading.ClassloadingPlugin;
 import dagger.internal.plugins.reflect.ReflectivePlugin;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -62,6 +63,17 @@ import static dagger.internal.RuntimeAggregatingPlugin.getAllModuleAdapters;
  */
 public abstract class ObjectGraph {
 
+  protected final ObjectGraph base;
+  protected final Plugin plugin;
+  protected final Linker linker;
+
+  ObjectGraph(ObjectGraph base, Plugin plugin, Linker linker) {
+    if (plugin == null) throw new NullPointerException("plugin");
+    this.base = base;
+    this.plugin = plugin;
+    this.linker = linker;
+  }
+
   /**
    * Returns an instance of {@code type}.
    *
@@ -80,8 +92,8 @@ public abstract class ObjectGraph {
   public abstract <T> T inject(T instance);
 
   /**
-   * Returns a new object graph that includes all of the objects in this graph,
-   * plus additional objects in the {@literal @}{@link Module}-annotated
+   * Returns a new object graph that includes any objects already configured in
+   * this graph, plus additional objects in the {@literal @}{@link Module}-annotated
    * modules. This graph is a subgraph of the returned graph.
    *
    * <p>The current graph is not modified by this operation: its objects and the
@@ -108,6 +120,58 @@ public abstract class ObjectGraph {
    */
   public abstract void injectStatics();
 
+  protected abstract Map<String, Class<?>> entryPoints();
+
+  /**
+   * A no-op object graph used as the root of a tree of graphs.
+   */
+  private static final class RootObjectGraph extends ObjectGraph {
+    private static final Map<String, Class<?>> NO_ENTRY_POINTS = new HashMap<String, Class<?>>(0);
+
+    private RootObjectGraph(Plugin plugin) {
+      super(null, plugin, null);
+    }
+
+    @Override
+    public <T> T get(Class<T> type) {
+      throw new UnsupportedOperationException("No objects exist in the root graph.");
+    }
+
+    @Override public <T> T inject(T instance) {
+      throw new UnsupportedOperationException("No objects exist in the root graph.");
+    }
+
+    @Override public ObjectGraph plus(Object... modules) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+
+    @Override
+    public void validate() {
+      // no-op
+    }
+
+    @Override public void injectStatics() {
+      // no-op
+    }
+
+    @Override protected Map<String, Class<?>> entryPoints() {
+      return NO_ENTRY_POINTS;
+    }
+  }
+
+  /**
+   * Returns an empty ObjectGraph from which graphs may be extended by calling
+   * {@link #plus(Object...)} with a module.  This graph is insufficient on its own
+   * and needs to be extended with modules to provide proper injection.
+   */
+  public static ObjectGraph root() {
+    RuntimeAggregatingPlugin plugin =
+        new RuntimeAggregatingPlugin(new ClassloadingPlugin(), new ReflectivePlugin());
+    return new RootObjectGraph(plugin);
+  }
+
+
   /**
    * Returns a new dependency graph using the {@literal @}{@link
    * Module}-annotated modules.
@@ -120,28 +184,30 @@ public abstract class ObjectGraph {
    * <p>This <strong>does not</strong> validate the graph. Rely on build time
    * tools for graph validation, or call {@link #validate} to find problems in
    * the graph at runtime.
+   *
+   * @deprecated Use ObjectGraph.root().plus(modules).
    */
+  @Deprecated
   public static ObjectGraph create(Object... modules) {
-    RuntimeAggregatingPlugin plugin = new RuntimeAggregatingPlugin(
-            new ClassloadingPlugin(), new ReflectivePlugin());
-    return DaggerObjectGraph.makeGraph(null, plugin, modules);
+    return ObjectGraph.root().plus(modules);
   }
 
   static class DaggerObjectGraph extends ObjectGraph {
 
-    private final DaggerObjectGraph base;
+    private final ObjectGraph base;
     private final Linker linker;
     private final Map<Class<?>, StaticInjection> staticInjections;
     private final Map<String, Class<?>> entryPoints;
     private final Plugin plugin;
 
-    DaggerObjectGraph(DaggerObjectGraph base,
+    DaggerObjectGraph(ObjectGraph base,
         Linker linker,
         Plugin plugin,
         Map<Class<?>, StaticInjection> staticInjections,
         Map<String, Class<?>> entryPoints) {
+      super(base, plugin, linker);
+      if (base == null) throw new NullPointerException("base");
       if (linker == null) throw new NullPointerException("linker");
-      if (plugin == null) throw new NullPointerException("plugin");
       if (staticInjections == null) throw new NullPointerException("staticInjections");
       if (entryPoints == null) throw new NullPointerException("entryPoints");
 
@@ -152,7 +218,7 @@ public abstract class ObjectGraph {
       this.entryPoints = entryPoints;
     }
 
-    private static ObjectGraph makeGraph(DaggerObjectGraph base, Plugin plugin, Object... modules) {
+    private static ObjectGraph makeGraph(ObjectGraph base, Plugin plugin, Object... modules) {
       Map<String, Class<?>> entryPoints = new LinkedHashMap<String, Class<?>>();
       Map<Class<?>, StaticInjection> staticInjections
           = new LinkedHashMap<Class<?>, StaticInjection>();
@@ -263,8 +329,8 @@ public abstract class ObjectGraph {
      */
     private Binding<?> getEntryPointBinding(String entryPointKey, String key) {
       Class<?> moduleClass = null;
-      for (DaggerObjectGraph graph = this; graph != null; graph = graph.base) {
-        moduleClass = graph.entryPoints.get(entryPointKey);
+      for (ObjectGraph graph = this; graph != null; graph = graph.base) {
+        moduleClass = graph.entryPoints().get(entryPointKey);
         if (moduleClass != null) break;
       }
       if (moduleClass == null) {
@@ -281,5 +347,10 @@ public abstract class ObjectGraph {
         return binding;
       }
     }
+
+    @Override protected Map<String, Class<?>> entryPoints() {
+      return entryPoints;
+    }
+
   }
 }
