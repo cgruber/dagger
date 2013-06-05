@@ -287,4 +287,27 @@ final class CodeGen {
     set.addAll(Arrays.asList(items));
     return set;
   }
+
+  /**
+   * Returns a user-presentable string like {@code
+   * coffee.CoffeeModule#provideHeater()}.
+   */
+  public static String methodName(ExecutableElement method) {
+    return ((TypeElement) method.getEnclosingElement()).getQualifiedName()
+        + "." + method.getSimpleName() + "()";
+  }
+
+  public static boolean isInterface(TypeMirror typeMirror) {
+    return typeMirror instanceof DeclaredType
+        && ((DeclaredType) typeMirror).asElement().getKind() == ElementKind.INTERFACE;
+  }
+
+  static boolean isStatic(Element element) {
+    for (Modifier modifier : element.getModifiers()) {
+      if (modifier.equals(Modifier.STATIC)) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

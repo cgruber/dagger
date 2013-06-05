@@ -22,12 +22,16 @@ import dagger.internal.Linker;
 import dagger.internal.ProblemDetector;
 import dagger.internal.SetBinding;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,21 +87,38 @@ public final class FullGraphProcessor extends AbstractProcessor {
 
     for (Element element : modules) {
       Map<String, Object> annotation = CodeGen.getAnnotation(Module.class, element);
-      if (!annotation.get("complete").equals(Boolean.TRUE)) {
-        continue;
-      }
       TypeElement moduleType = (TypeElement) element;
-      Map<String, Binding<?>> bindings = processCompleteModule(moduleType);
-      try {
-        new ProblemDetector().detectProblems(bindings.values());
-      } catch (IllegalStateException e) {
-        error("Graph validation failed: " + e.getMessage(), moduleType);
-        continue;
+
+      if (annotation.get("complete").equals(Boolean.TRUE)) {
+        Map<String, Binding<?>> bindings;
+        try {
+          bindings = processCompleteModule(moduleType, false);
+          new ProblemDetector().detectCircularDependencies(bindings.values());
+        } catch (ModuleValidationException e) {
+          error("Graph validation failed: " + e.getMessage(), e.source);
+          continue;
+        } catch (IllegalStateException e) {
+          error("Graph validation failed: " + e.getMessage(), moduleType);
+          continue;
+        }
+        try {
+          writeDotFile(moduleType, bindings);
+        } catch (IOException e) {
+          StringWriter sw = new StringWriter();
+          e.printStackTrace(new PrintWriter(sw));
+          processingEnv.getMessager()
+              .printMessage(Diagnostic.Kind.WARNING,
+                  "Graph visualization failed. Please report this as a bug.\n\n" + sw, moduleType);
+        }
       }
-      try {
-        writeDotFile(moduleType, bindings);
-      } catch (IOException e) {
-        error("Graph visualization failed: " + e, moduleType);
+
+      if (annotation.get("library").equals(Boolean.FALSE)) {
+        Map<String, Binding<?>> bindings = processCompleteModule(moduleType, true);
+        try {
+          new ProblemDetector().detectUnusedBinding(bindings.values());
+        } catch (IllegalStateException e) {
+          error("Graph validation failed: " + e.getMessage(), moduleType);
+        }
       }
     }
     return true;
@@ -107,12 +128,15 @@ public final class FullGraphProcessor extends AbstractProcessor {
     processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
   }
 
-  private Map<String, Binding<?>> processCompleteModule(TypeElement rootModule) {
+  private Map<String, Binding<?>> processCompleteModule(TypeElement rootModule,
+      boolean ignoreCompletenessErrors) {
     Map<String, TypeElement> allModules = new LinkedHashMap<String, TypeElement>();
-    collectIncludesRecursively(rootModule, allModules);
+    collectIncludesRecursively(rootModule, allModules, new LinkedList<String>());
+    ArrayList<CodeGenStaticInjection> staticInjections = new ArrayList<CodeGenStaticInjection>();
 
-    Linker linker = new Linker(null, new CompileTimePlugin(processingEnv),
-        new ReportingErrorHandler(processingEnv, rootModule.getQualifiedName().toString()));
+    Linker.ErrorHandler errorHandler = ignoreCompletenessErrors ? Linker.ErrorHandler.NULL
+        : new ReportingErrorHandler(processingEnv, rootModule.getQualifiedName().toString());
+    Linker linker = new Linker(null, new CompileTimeLoader(processingEnv), errorHandler);
     // Linker requires synchronization for calls to requestBinding and linkAll.
     // We know statically that we're single threaded, but we synchronize anyway
     // to make the linker happy.
@@ -122,16 +146,24 @@ public final class FullGraphProcessor extends AbstractProcessor {
       for (TypeElement module : allModules.values()) {
         Map<String, Object> annotation = CodeGen.getAnnotation(Module.class, module);
         boolean overrides = (Boolean) annotation.get("overrides");
+        boolean library = (Boolean) annotation.get("library");
         Map<String, Binding<?>> addTo = overrides ? overrideBindings : baseBindings;
 
-        // Gather the entry points from the annotation.
-        for (Object entryPoint : (Object[]) annotation.get("entryPoints")) {
-          linker.requestBinding(GeneratorKeys.rawMembersKey((TypeMirror) entryPoint),
-              module.getQualifiedName().toString(), false);
+        // Gather the injectable types from the annotation.
+        for (Object injectableTypeObject : (Object[]) annotation.get("injects")) {
+          TypeMirror injectableType = (TypeMirror) injectableTypeObject;
+          String key = CodeGen.isInterface(injectableType)
+              ? GeneratorKeys.get(injectableType)
+              : GeneratorKeys.rawMembersKey(injectableType);
+          linker.requestBinding(key, module.getQualifiedName().toString(), false, true);
         }
 
         // Gather the static injections.
-        // TODO.
+        for (Object staticInjection : (Object[]) annotation.get("staticInjections")) {
+          TypeMirror staticInjectionTypeMirror = (TypeMirror) staticInjection;
+          Element element = processingEnv.getTypeUtils().asElement(staticInjectionTypeMirror);
+          staticInjections.add(new CodeGenStaticInjection(element));
+        }
 
         // Gather the enclosed @Provides methods.
         for (Element enclosed : module.getEnclosedElements()) {
@@ -141,22 +173,30 @@ public final class FullGraphProcessor extends AbstractProcessor {
           }
           ExecutableElement providerMethod = (ExecutableElement) enclosed;
           String key = GeneratorKeys.get(providerMethod);
-          ProviderMethodBinding binding = new ProviderMethodBinding(key, providerMethod);
+          Binding binding = new ProviderMethodBinding(key, providerMethod, library);
+
+          Binding previous = addTo.get(key);
+          if (previous != null) {
+            if (provides.type() == Provides.Type.SET && previous instanceof SetBinding) {
+              // No duplicate bindings error if both bindings are set bindings.
+            } else {
+              String message = "Duplicate bindings for " + key;
+              if (overrides) {
+                message += " in override module(s) - cannot override an override";
+              }
+              message += ":\n    " + previous.requiredBy + "\n    " + binding.requiredBy;
+              error(message, providerMethod);
+            }
+          }
+
           switch (provides.type()) {
             case UNIQUE:
-              ProviderMethodBinding clobbered = (ProviderMethodBinding) addTo.put(key, binding);
-              if (clobbered != null) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "Duplicate bindings for " + key
-                        + ": " + shortMethodName(clobbered.method)
-                        + ", " + shortMethodName(binding.method),
-                    binding.method);
-              }
+              addTo.put(key, binding);
               break;
 
             case SET:
-              String elementKey = GeneratorKeys.getElementKey(providerMethod);
-              SetBinding.add(addTo, elementKey, binding);
+              String setKey = GeneratorKeys.getSetKey(providerMethod);
+              SetBinding.add(addTo, setKey, binding);
               break;
 
             default:
@@ -167,6 +207,9 @@ public final class FullGraphProcessor extends AbstractProcessor {
 
       linker.installBindings(baseBindings);
       linker.installBindings(overrideBindings);
+      for (CodeGenStaticInjection staticInjection : staticInjections) {
+        staticInjection.attach(linker);
+      }
 
       // Link the bindings. This will traverse the dependency graph, and report
       // errors if any dependencies are missing.
@@ -179,16 +222,34 @@ public final class FullGraphProcessor extends AbstractProcessor {
         + "." + method.getSimpleName() + "()";
   }
 
-  private void collectIncludesRecursively(TypeElement module, Map<String, TypeElement> result) {
+  void collectIncludesRecursively(
+      TypeElement module, Map<String, TypeElement> result, Deque<String> path) {
     Map<String, Object> annotation = CodeGen.getAnnotation(Module.class, module);
     if (annotation == null) {
       // TODO(tbroyer): pass annotation information
-      error("No @Module on " + module, module);
-      return;
+      throw new ModuleValidationException("No @Module on " + module, module);
     }
 
     // Add the module.
-    result.put(module.getQualifiedName().toString(), module);
+    String name = module.getQualifiedName().toString();
+    if (path.contains(name)) {
+      StringBuilder message = new StringBuilder("Module Inclusion Cycle: ");
+      if (path.size() == 1) {
+        message.append(name).append(" includes itself directly.");
+      } else {
+        String current = null;
+        String includer = name;
+        for (int i = 0; path.size() > 0; i++) {
+          current = includer;
+          includer = path.pop();
+          message.append("\n").append(i).append(". ")
+              .append(current).append(" included by ").append(includer);
+        }
+        message.append("\n0. ").append(name);
+      }
+      throw new ModuleValidationException(message.toString(), module);
+    }
+    result.put(name, module);
 
     // Recurse for each included module.
     Types typeUtils = processingEnv.getTypeUtils();
@@ -203,7 +264,9 @@ public final class FullGraphProcessor extends AbstractProcessor {
         continue;
       }
       TypeElement includedModule = (TypeElement) typeUtils.asElement((TypeMirror) include);
-      collectIncludesRecursively(includedModule, result);
+      path.push(name);
+      collectIncludesRecursively(includedModule, result, path);
+      path.pop();
     }
   }
 
@@ -211,10 +274,12 @@ public final class FullGraphProcessor extends AbstractProcessor {
     private final ExecutableElement method;
     private final Binding<?>[] parameters;
 
-    protected ProviderMethodBinding(String provideKey, ExecutableElement method) {
-      super(provideKey, null, method.getAnnotation(Singleton.class) != null, method.toString());
+    protected ProviderMethodBinding(String provideKey, ExecutableElement method, boolean library) {
+      super(provideKey, null, method.getAnnotation(Singleton.class) != null,
+          CodeGen.methodName(method));
       this.method = method;
       this.parameters = new Binding[method.getParameters().size()];
+      setLibrary(library);
     }
 
     @Override public void attach(Linker linker) {
@@ -248,5 +313,14 @@ public final class FullGraphProcessor extends AbstractProcessor {
     DotWriter dotWriter = new DotWriter(writer);
     new GraphVisualizer().write(bindings, dotWriter);
     dotWriter.close();
+  }
+
+  static class ModuleValidationException extends IllegalStateException {
+    final TypeElement source;
+
+    public ModuleValidationException(String message, TypeElement source) {
+      super(message);
+      this.source = source;
+    }
   }
 }

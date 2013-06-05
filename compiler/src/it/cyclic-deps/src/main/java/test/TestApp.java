@@ -17,11 +17,10 @@
 package test;
 
 import dagger.Module;
-import dagger.ObjectGraph;
 import dagger.Provides;
 import javax.inject.Inject;
 
-class TestApp implements Runnable {
+class TestApp {
   
   static class Foo {
     @Inject Foo(@SuppressWarnings("unused") Bar b) { }
@@ -39,7 +38,7 @@ class TestApp implements Runnable {
     @Inject Foo f;
   }
 
-  @Module(entryPoints = EntryPoint.class)
+  @Module(injects = EntryPoint.class)
   static class TestModule {
     
   }
@@ -48,11 +47,11 @@ class TestApp implements Runnable {
   static class B { }
   static class C { }
   static class D { }
-  @Module(entryPoints = D.class)
+  @Module(injects = D.class)
   static class CyclicModule {
-    @Provides A a(@SuppressWarnings("unused") D d) { }
-    @Provides B b(@SuppressWarnings("unused") A a) { }
-    @Provides C c(@SuppressWarnings("unused") B b) { }
-    @Provides D d(@SuppressWarnings("unused") C c) { }
+    @Provides A a(@SuppressWarnings("unused") D d) { return null; }
+    @Provides B b(@SuppressWarnings("unused") A a) { return null; }
+    @Provides C c(@SuppressWarnings("unused") B b) { return null; }
+    @Provides D d(@SuppressWarnings("unused") C c) { return null; }
   }
 }

@@ -48,11 +48,11 @@ public final class Linker {
   /** All of the object graph's bindings. This may contain unlinked bindings. */
   private final Map<String, Binding<?>> bindings = new HashMap<String, Binding<?>>();
 
-  private final Plugin plugin;
+  private final Loader plugin;
 
   private final ErrorHandler errorHandler;
 
-  public Linker(Linker base, Plugin plugin, ErrorHandler errorHandler) {
+  public Linker(Linker base, Loader plugin, ErrorHandler errorHandler) {
     if (plugin == null) throw new NullPointerException("plugin");
     if (errorHandler == null) throw new NullPointerException("errorHandler");
 
@@ -101,12 +101,14 @@ public final class Linker {
       if (binding instanceof DeferredBinding) {
         DeferredBinding deferredBinding = (DeferredBinding) binding;
         String key = deferredBinding.deferredKey;
-        boolean mustBeInjectable = deferredBinding.mustBeInjectable;
+        boolean mustHaveInjections = deferredBinding.mustHaveInjections;
         if (bindings.containsKey(key)) {
           continue; // A binding for this key has since been linked.
         }
         try {
-          Binding<?> jitBinding = createJitBinding(key, binding.requiredBy, mustBeInjectable);
+          Binding<?> jitBinding = createJitBinding(key, binding.requiredBy, mustHaveInjections);
+          jitBinding.setLibrary(binding.library());
+          jitBinding.setDependedOn(binding.dependedOn());
           // Fail if the type of binding we got wasn't capable of what was requested.
           if (!key.equals(jitBinding.provideKey) && !key.equals(jitBinding.membersKey)) {
             throw new IllegalStateException("Unable to create binding for " + key);
@@ -165,7 +167,7 @@ public final class Linker {
    *   <li>Injections of other types will use the injectable constructors of those classes.
    * </ul>
    */
-  private Binding<?> createJitBinding(String key, Object requiredBy, boolean mustBeInjectable)
+  private Binding<?> createJitBinding(String key, Object requiredBy, boolean mustHaveInjections)
       throws ClassNotFoundException {
     String builtInBindingsKey = Keys.getBuiltInBindingsKey(key);
     if (builtInBindingsKey != null) {
@@ -178,7 +180,7 @@ public final class Linker {
 
     String className = Keys.getClassName(key);
     if (className != null && !Keys.isAnnotated(key)) {
-      Binding<?> atInjectBinding = plugin.getAtInjectBinding(key, className, mustBeInjectable);
+      Binding<?> atInjectBinding = plugin.getAtInjectBinding(key, className, mustHaveInjections);
       if (atInjectBinding != null) {
         return atInjectBinding;
       }
@@ -187,14 +189,13 @@ public final class Linker {
     throw new IllegalArgumentException("No binding for " + key);
   }
 
-
   /**
    * Returns the binding if it exists immediately. Otherwise this returns
    * null. If the returned binding didn't exist or was unlinked, it will be
    * enqueued to be linked.
    */
   public Binding<?> requestBinding(String key, Object requiredBy) {
-    return requestBinding(key, requiredBy, true);
+    return requestBinding(key, requiredBy, true, true);
   }
 
   /**
@@ -202,12 +203,14 @@ public final class Linker {
    * null. If the returned binding didn't exist or was unlinked, it will be
    * enqueued to be linked.
    *
-   * @param mustBeInjectable true if the the referenced key doesn't need to be
-   *     injectable. This is necessary for entry points (so that framework code
-   *     can inject arbitrary entry points like JUnit test cases or Android
-   *     activities) and for supertypes.
+   * @param mustHaveInjections true if the the referenced key requires either an
+   *     {@code @Inject} annotation is produced by a {@code @Provides} method.
+   *     This isn't necessary for Module.injects types because frameworks need
+   *     to inject arbitrary classes like JUnit test cases and Android
+   *     activities. It also isn't necessary for supertypes.
    */
-  public Binding<?> requestBinding(String key, Object requiredBy, boolean mustBeInjectable) {
+  public Binding<?> requestBinding(String key, Object requiredBy, boolean mustHaveInjections,
+      boolean library) {
     assertLockHeld();
 
     Binding<?> binding = null;
@@ -221,7 +224,9 @@ public final class Linker {
 
     if (binding == null) {
       // We can't satisfy this binding. Make sure it'll work next time!
-      Binding<?> deferredBinding = new DeferredBinding(key, requiredBy, mustBeInjectable);
+      Binding<?> deferredBinding = new DeferredBinding(key, requiredBy, mustHaveInjections);
+      deferredBinding.setLibrary(library);
+      deferredBinding.setDependedOn(true);
       toLink.add(deferredBinding);
       attachSuccess = false;
       return null;
@@ -231,6 +236,8 @@ public final class Linker {
       toLink.add(binding); // This binding was never linked; link it now!
     }
 
+    binding.setLibrary(library);
+    binding.setDependedOn(true);
     return binding;
   }
 
@@ -279,7 +286,7 @@ public final class Linker {
    */
   private static class SingletonBinding<T> extends Binding<T> {
     private final Binding<T> binding;
-    private Object onlyInstance = UNINITIALIZED;
+    private volatile Object onlyInstance = UNINITIALIZED;
 
     private SingletonBinding(Binding<T> binding) {
       super(binding.provideKey, binding.membersKey, true, binding.requiredBy);
@@ -296,9 +303,12 @@ public final class Linker {
 
     @SuppressWarnings("unchecked") // onlyInstance is either 'UNINITIALIZED' or a 'T'.
     @Override public T get() {
-      // TODO (cgruber): Fix concurrency risk.
       if (onlyInstance == UNINITIALIZED) {
-        onlyInstance = binding.get();
+        synchronized (this) {
+          if (onlyInstance == UNINITIALIZED) {
+            onlyInstance = binding.get();
+          }
+        }
       }
       return (T) onlyInstance;
     }
@@ -319,12 +329,28 @@ public final class Linker {
       return binding.isVisiting();
     }
 
+    @Override public boolean library() {
+      return binding.library();
+    }
+
+    @Override public boolean dependedOn() {
+      return binding.dependedOn();
+    }
+
     @Override public void setCycleFree(final boolean cycleFree) {
       binding.setCycleFree(cycleFree);
     }
 
     @Override public void setVisiting(final boolean visiting) {
       binding.setVisiting(visiting);
+    }
+
+    @Override public void setLibrary(boolean library) {
+      binding.setLibrary(true);
+    }
+
+    @Override public void setDependedOn(boolean dependedOn) {
+      binding.setDependedOn(dependedOn);
     }
 
     @Override protected boolean isSingleton() {
@@ -342,6 +368,11 @@ public final class Linker {
 
   /** Handles linker errors appropriately. */
   public interface ErrorHandler {
+    ErrorHandler NULL = new ErrorHandler() {
+      @Override public void handleErrors(List<String> errors) {
+      }
+    };
+
     /**
      * Fail if any errors have been enqueued.
      * Implementations may throw exceptions or report the errors through another
@@ -354,11 +385,12 @@ public final class Linker {
 
   private static class DeferredBinding extends Binding<Object> {
     final String deferredKey;
-    final boolean mustBeInjectable;
-    private DeferredBinding(String deferredKey, Object requiredBy, boolean mustBeInjectable) {
+    final boolean mustHaveInjections;
+
+    private DeferredBinding(String deferredKey, Object requiredBy, boolean mustHaveInjections) {
       super(null, null, false, requiredBy);
       this.deferredKey = deferredKey;
-      this.mustBeInjectable = mustBeInjectable;
+      this.mustHaveInjections = mustHaveInjections;
     }
     @Override public void injectMembers(Object t) {
       throw new UnsupportedOperationException("Deferred bindings must resolve first.");
@@ -367,5 +399,4 @@ public final class Linker {
       throw new UnsupportedOperationException("Deferred bindings must resolve first.");
     }
   }
-
 }

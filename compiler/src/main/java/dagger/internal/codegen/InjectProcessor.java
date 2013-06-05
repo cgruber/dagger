@@ -46,8 +46,8 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 import static dagger.internal.codegen.ProcessorJavadocs.binderTypeDocs;
-import static dagger.internal.plugins.loading.ClassloadingPlugin.INJECT_ADAPTER_SUFFIX;
-import static dagger.internal.plugins.loading.ClassloadingPlugin.STATIC_INJECTION_SUFFIX;
+import static dagger.internal.loaders.generated.GeneratedAdapterLoader.INJECT_ADAPTER_SUFFIX;
+import static dagger.internal.loaders.generated.GeneratedAdapterLoader.STATIC_INJECTION_SUFFIX;
 import static java.lang.reflect.Modifier.FINAL;
 import static java.lang.reflect.Modifier.PRIVATE;
 import static java.lang.reflect.Modifier.PUBLIC;
@@ -116,16 +116,32 @@ public final class InjectProcessor extends AbstractProcessor {
     // First gather the set of classes that have @Inject-annotated members.
     Set<String> injectedTypeNames = new LinkedHashSet<String>();
     for (Element element : env.getElementsAnnotatedWith(Inject.class)) {
-      Element enclosingType = element.getEnclosingElement();
-      if (!validateInjectable(enclosingType)) {
+      if (!validateInjectable(element)) {
         continue;
       }
-      injectedTypeNames.add(CodeGen.rawTypeToString(enclosingType.asType(), '.'));
+      injectedTypeNames.add(CodeGen.rawTypeToString(element.getEnclosingElement().asType(), '.'));
     }
     return injectedTypeNames;
   }
 
-  private boolean validateInjectable(Element injectableType) {
+  private boolean validateInjectable(Element injectable) {
+    Element injectableType = injectable.getEnclosingElement();
+
+    if (injectable.getKind() == ElementKind.CLASS) {
+      error("@Inject is not valid on a class: " + injectable, injectable);
+      return false;
+    }
+
+    if (injectable.getKind() == ElementKind.METHOD) {
+      error("Method injection is not supported: " + injectableType + "." + injectable, injectable);
+      return false;
+    }
+    if (injectable.getModifiers().contains(Modifier.PRIVATE)) {
+      error("Can't inject a private field or constructor: " + injectableType + "." + injectable,
+          injectable);
+      return false;
+    }
+
     ElementKind elementKind = injectableType.getEnclosingElement().getKind();
     boolean isClassOrInterface = elementKind.isClass() || elementKind.isInterface();
     boolean isStatic = injectableType.getModifiers().contains(Modifier.STATIC);
@@ -278,7 +294,7 @@ public final class InjectProcessor extends AbstractProcessor {
             strippedTypeName);
       }
       if (supertype != null) {
-        writer.emitStatement("%s = (%s) linker.requestBinding(%s, %s.class, false)",
+        writer.emitStatement("%s = (%s) linker.requestBinding(%s, %s.class, false, true)",
             "supertype",
             writer.compressType(JavaWriter.type(Binding.class,
                 CodeGen.rawTypeToString(supertype, '.'))),

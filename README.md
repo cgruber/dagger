@@ -16,17 +16,18 @@ include `dagger-compiler-${dagger.version}.jar` in your build at compile time.
 
 In a Maven project, one would include the runtime in the dependencies section
 of your `pom.xml` (replacing `${dagger.version}` with the appropriate current
-release), and the `dagger-compiler` artifact as an "optional" dependency:
+release), and the `dagger-compiler` artifact as an "optional" or "provided"
+dependency:
 
 ```xml
 <dependencies>
   <dependency>
-    <groupId>com.squareup</groupId>
+    <groupId>com.squareup.dagger</groupId>
     <artifactId>dagger</artifactId>
     <version>${dagger.version}</version>
   </dependency>
   <dependency>
-    <groupId>com.squareup</groupId>
+    <groupId>com.squareup.dagger</groupId>
     <artifactId>dagger-compiler</artifactId>
     <version>${dagger.version}</version>
     <optional>true</optional>
@@ -34,7 +35,8 @@ release), and the `dagger-compiler` artifact as an "optional" dependency:
 </dependencies>
 ```
 
-You can also find downloadable .jars on the [GitHub download page][2].
+You can also find downloadable .jars on Maven Central. You'll need
+[Dagger][dl-dagger], [JavaWriter][dl-javawriter], and [javax.inject][dl-inject].
 
 
 
@@ -58,4 +60,6 @@ License
 
 
  [1]: http://square.github.com/dagger/
- [2]: http://github.com/square/dagger/downloads
+ [dl-dagger]: http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.squareup.dagger%22%20a%3A%22dagger%22
+ [dl-javawriter]: http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.squareup%22%20a%3A%22javawriter%22
+ [dl-inject]: http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22javax.inject%22%20a%3A%22javax.inject%22

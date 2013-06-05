@@ -25,11 +25,31 @@ import java.util.List;
  * Detects problems like cyclic dependencies.
  */
 public final class ProblemDetector {
-  public void detectProblems(Collection<Binding<?>> bindings) {
+  public void detectCircularDependencies(Collection<Binding<?>> bindings) {
     detectCircularDependencies(bindings, new ArrayList<Binding<?>>());
   }
 
-  public void detectCircularDependencies(Collection<Binding<?>> bindings, List<Binding<?>> path) {
+  public void detectUnusedBinding(Collection<Binding<?>> bindings) {
+    List<Binding> unusedBindings = new ArrayList<Binding>();
+    for (Binding<?> binding : bindings) {
+      if (!binding.library() && !binding.dependedOn()) {
+        unusedBindings.add(binding);
+      }
+    }
+    if (!unusedBindings.isEmpty()) {
+      StringBuilder builder = new StringBuilder();
+      builder.append("You have these unused @Provider methods:");
+      for (int i = 0; i < unusedBindings.size(); i++) {
+        builder.append("\n    ").append(i + 1).append(". ")
+            .append(unusedBindings.get(i).requiredBy);
+      }
+      builder.append("\n    Set library=true in your module to disable this check.");
+      throw new IllegalStateException(builder.toString());
+    }
+  }
+
+  private static void detectCircularDependencies(Collection<Binding<?>> bindings,
+      List<Binding<?>> path) {
     for (Binding<?> binding : bindings) {
       if (binding.isCycleFree()) {
         continue;
@@ -59,6 +79,11 @@ public final class ProblemDetector {
         binding.setVisiting(false);
       }
     }
+  }
+
+  public void detectProblems(Collection<Binding<?>> values) {
+    detectCircularDependencies(values);
+    detectUnusedBinding(values);
   }
 
   static class ArraySet<T> extends AbstractSet<T> {

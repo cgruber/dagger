@@ -45,11 +45,13 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 import static dagger.internal.codegen.ProcessorJavadocs.binderTypeDocs;
-import static dagger.internal.plugins.loading.ClassloadingPlugin.MODULE_ADAPTER_SUFFIX;
+import static dagger.internal.loaders.generated.GeneratedAdapterLoader.MODULE_ADAPTER_SUFFIX;
 import static java.lang.reflect.Modifier.FINAL;
 import static java.lang.reflect.Modifier.PRIVATE;
 import static java.lang.reflect.Modifier.PROTECTED;
@@ -71,7 +73,6 @@ public final class ProvidesProcessor extends AbstractProcessor {
     return SourceVersion.latestSupported();
   }
 
-  // TODO: include @Provides methods from the superclass
   @Override public boolean process(Set<? extends TypeElement> types, RoundEnvironment env) {
     remainingTypes.putAll(providerMethodsByClass(env));
     for (Iterator<String> i = remainingTypes.keySet().iterator(); i.hasNext();) {
@@ -107,16 +108,26 @@ public final class ProvidesProcessor extends AbstractProcessor {
    * Returns a map containing all {@code @Provides} methods, indexed by class.
    */
   private Map<String, List<ExecutableElement>> providerMethodsByClass(RoundEnvironment env) {
-    Map<String, List<ExecutableElement>> result
-        = new HashMap<String, List<ExecutableElement>>();
+    Elements elementUtils = processingEnv.getElementUtils();
+    Types typeUtils = processingEnv.getTypeUtils();
+
+    TypeElement providerElement = elementUtils.getTypeElement("javax.inject.Provider");
+    TypeMirror providerType = typeUtils.erasure(providerElement.asType());
+    TypeElement lazyElement = elementUtils.getTypeElement("dagger.Lazy");
+    TypeMirror lazyType = typeUtils.erasure(lazyElement.asType());
+
+    Map<String, List<ExecutableElement>> result = new HashMap<String, List<ExecutableElement>>();
     for (Element providerMethod : providesMethods(env)) {
+      switch (providerMethod.getEnclosingElement().getKind()) {
+        case CLASS:
+          break; // valid, move along
+        default:
+          // TODO(tbroyer): pass annotation information
+          error("Unexpected @Provides on " + providerMethod, providerMethod);
+          continue;
+      }
       TypeElement type = (TypeElement) providerMethod.getEnclosingElement();
       Set<Modifier> typeModifiers = type.getModifiers();
-      if (type.getKind() != ElementKind.CLASS) {
-        // TODO(tbroyer): pass annotation information
-        error("Unexpected @Provides on " + providerMethod, providerMethod);
-        continue;
-      }
       if (typeModifiers.contains(Modifier.PRIVATE)
           || typeModifiers.contains(Modifier.ABSTRACT)) {
         error("Classes declaring @Provides methods must not be private or abstract: "
@@ -140,6 +151,22 @@ public final class ProvidesProcessor extends AbstractProcessor {
         continue;
       }
 
+      TypeMirror returnType = typeUtils.erasure(providerMethodAsExecutable.getReturnType());
+      if (typeUtils.isSameType(returnType, providerType)) {
+        error("@Provides method must not return Provider directly: "
+            + type.getQualifiedName()
+            + "."
+            + providerMethod, providerMethod);
+        continue;
+      }
+      if (typeUtils.isSameType(returnType, lazyType)) {
+        error("@Provides method must not return Lazy directly: "
+            + type.getQualifiedName()
+            + "."
+            + providerMethod, providerMethod);
+        continue;
+      }
+
       List<ExecutableElement> methods = result.get(type.getQualifiedName().toString());
       if (methods == null) {
         methods = new ArrayList<ExecutableElement>();
@@ -148,14 +175,26 @@ public final class ProvidesProcessor extends AbstractProcessor {
       methods.add(providerMethodAsExecutable);
     }
 
-    // Catch any stray modules without @Provides since their entry points
+    TypeMirror objectType = elementUtils.getTypeElement("java.lang.Object").asType();
+
+    // Catch any stray modules without @Provides since their injectable types
     // should still be registered and a ModuleAdapter should still be written.
-    for (Element type : env.getElementsAnnotatedWith(Module.class)) {
-      if (type.getKind().equals(ElementKind.CLASS)) {
-        String moduleType = ((TypeElement) type).getQualifiedName().toString();
-        if (result.containsKey(moduleType)) continue;
-        result.put(moduleType, new ArrayList<ExecutableElement>());
+    for (Element module : env.getElementsAnnotatedWith(Module.class)) {
+      if (!module.getKind().equals(ElementKind.CLASS)) {
+        error("Modules must be classes: " + module, module);
+        continue;
       }
+
+      TypeElement moduleType = (TypeElement) module;
+
+      // Verify that all modules do not extend from non-Object types.
+      if (!moduleType.getSuperclass().equals(objectType)) {
+        error("Modules must not extend from other classes: " + module, module);
+      }
+
+      String moduleName = moduleType.getQualifiedName().toString();
+      if (result.containsKey(moduleName)) continue;
+      result.put(moduleName, new ArrayList<ExecutableElement>());
     }
     return result;
   }
@@ -178,11 +217,12 @@ public final class ProvidesProcessor extends AbstractProcessor {
     }
 
     Object[] staticInjections = (Object[]) module.get("staticInjections");
-    Object[] entryPoints = (Object[]) module.get("entryPoints");
+    Object[] injects = (Object[]) module.get("injects");
     Object[] includes = (Object[]) module.get("includes");
 
     boolean overrides = (Boolean) module.get("overrides");
     boolean complete = (Boolean) module.get("complete");
+    boolean library = (Boolean) module.get("library");
 
     String adapterName = CodeGen.adapterName(type, MODULE_ADAPTER_SUFFIX);
     JavaFileObject sourceFile = processingEnv.getFiler()
@@ -204,15 +244,17 @@ public final class ProvidesProcessor extends AbstractProcessor {
     writer.beginType(adapterName, "class", PUBLIC | FINAL,
         JavaWriter.type(ModuleAdapter.class, typeName));
 
-    StringBuilder entryPointsField = new StringBuilder().append("{ ");
-    for (Object entryPoint : entryPoints) {
-      TypeMirror typeMirror = (TypeMirror) entryPoint;
-      String key = GeneratorKeys.rawMembersKey(typeMirror);
-      entryPointsField.append(JavaWriter.stringLiteral(key)).append(", ");
+    StringBuilder injectsField = new StringBuilder().append("{ ");
+    for (Object injectableType : injects) {
+      TypeMirror typeMirror = (TypeMirror) injectableType;
+      String key = CodeGen.isInterface(typeMirror)
+          ? GeneratorKeys.get(typeMirror)
+          : GeneratorKeys.rawMembersKey(typeMirror);
+      injectsField.append(JavaWriter.stringLiteral(key)).append(", ");
     }
-    entryPointsField.append("}");
-    writer.emitField("String[]", "ENTRY_POINTS", PRIVATE | STATIC | FINAL,
-        entryPointsField.toString());
+    injectsField.append("}");
+    writer.emitField("String[]", "INJECTS", PRIVATE | STATIC | FINAL,
+        injectsField.toString());
 
     StringBuilder staticInjectionsField = new StringBuilder().append("{ ");
     for (Object staticInjection : staticInjections) {
@@ -239,8 +281,8 @@ public final class ProvidesProcessor extends AbstractProcessor {
 
     writer.emitEmptyLine();
     writer.beginMethod(null, adapterName, PUBLIC);
-    writer.emitStatement("super(ENTRY_POINTS, STATIC_INJECTIONS, %s /*overrides*/, "
-        + "INCLUDES, %s /*complete*/)", overrides, complete);
+    writer.emitStatement("super(INJECTS, STATIC_INJECTIONS, %s /*overrides*/, "
+        + "INCLUDES, %s /*complete*/, %s /*library*/)", overrides, complete, library);
     writer.endMethod();
 
     ExecutableElement noArgsConstructor = CodeGen.getNoArgsConstructor(type);
@@ -272,7 +314,7 @@ public final class ProvidesProcessor extends AbstractProcessor {
             break;
           }
           case SET: {
-            String key = GeneratorKeys.getElementKey(providerMethod);
+            String key = GeneratorKeys.getSetKey(providerMethod);
             writer.emitStatement("SetBinding.add(map, %s, new %s(module))",
                 JavaWriter.stringLiteral(key),
                 bindingClassName(providerMethod, methodToClassName, methodNameToNextId));
@@ -286,7 +328,8 @@ public final class ProvidesProcessor extends AbstractProcessor {
     }
 
     for (ExecutableElement providerMethod : providerMethods) {
-      writeProvidesAdapter(writer, providerMethod, methodToClassName, methodNameToNextId);
+      writeProvidesAdapter(writer, providerMethod, methodToClassName, methodNameToNextId,
+          library);
     }
 
     writer.endType();
@@ -353,7 +396,7 @@ public final class ProvidesProcessor extends AbstractProcessor {
 
   private void writeProvidesAdapter(JavaWriter writer, ExecutableElement providerMethod,
       Map<ExecutableElement, String> methodToClassName,
-      Map<String, AtomicInteger> methodNameToNextId)
+      Map<String, AtomicInteger> methodNameToNextId, boolean library)
       throws IOException {
     String methodName = providerMethod.getSimpleName().toString();
     String moduleType = CodeGen.typeToString(providerMethod.getEnclosingElement().asType());
@@ -380,9 +423,11 @@ public final class ProvidesProcessor extends AbstractProcessor {
     boolean singleton = providerMethod.getAnnotation(Singleton.class) != null;
     String key = JavaWriter.stringLiteral(GeneratorKeys.get(providerMethod));
     String membersKey = null;
-    writer.emitStatement("super(%s, %s, %s, %s.class)",
-        key, membersKey, (singleton ? "IS_SINGLETON" : "NOT_SINGLETON"), moduleType);
+    writer.emitStatement("super(%s, %s, %s, %s)",
+        key, membersKey, (singleton ? "IS_SINGLETON" : "NOT_SINGLETON"),
+        JavaWriter.stringLiteral(moduleType + "." + methodName + "()"));
     writer.emitStatement("this.module = module");
+    writer.emitStatement("setLibrary(%s)", library);
     writer.endMethod();
 
     if (dependent) {

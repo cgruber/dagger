@@ -29,7 +29,7 @@ public final class ProblemDetectorTest {
       @Inject Rock rock;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -61,7 +61,7 @@ public final class ProblemDetectorTest {
   }
 
   @Test public void validateLazy() {
-    @Module
+    @Module(library = true)
     class TestModule {
       @Provides Integer dependOnLazy(Lazy<String> lazyString) {
         throw new AssertionError();

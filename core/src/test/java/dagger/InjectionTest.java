@@ -17,9 +17,11 @@
 package dagger;
 
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -40,7 +42,7 @@ public final class InjectionTest {
       @Inject Provider<G> gProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides E provideE(F f) {
         return new E(f);
@@ -105,7 +107,7 @@ public final class InjectionTest {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -124,7 +126,7 @@ public final class InjectionTest {
       @Inject Provider<I> iProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton F provideF() {
         return new F();
@@ -152,7 +154,7 @@ public final class InjectionTest {
       @Inject @Named("two") A aTwo;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Named("one") A getOne() {
         return one;
@@ -174,7 +176,7 @@ public final class InjectionTest {
       @Inject Provider<L> lProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       A a1;
       A a2;
@@ -211,7 +213,7 @@ public final class InjectionTest {
       @Inject F f2;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton F provideF() {
         return new F();
@@ -241,7 +243,7 @@ public final class InjectionTest {
       @Inject @Named("a") A a;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -258,7 +260,7 @@ public final class InjectionTest {
       @Inject Q q;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides F provideF() {
         return new F();
@@ -275,7 +277,7 @@ public final class InjectionTest {
       @Inject T t;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -304,7 +306,7 @@ public final class InjectionTest {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       boolean sInjected = false;
 
@@ -353,12 +355,30 @@ public final class InjectionTest {
     }
   }
 
+  @Test public void providerMethodsConflictWithSet() {
+    @Module
+    class TestModule {
+      @Provides(type = Provides.Type.SET) A provideSetElement() {
+        throw new AssertionError();
+      }
+      @Provides Set<A> provideSet() {
+        throw new AssertionError();
+      }
+    }
+
+    try {
+      ObjectGraph.create(new TestModule());
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+
   @Test public void singletonsInjectedOnlyIntoProviders() {
     class TestEntryPoint {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton A provideA() {
         return new A();
@@ -375,7 +395,7 @@ public final class InjectionTest {
       @Inject Provider<E> eProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class BaseModule {
       @Provides F provideF() {
         throw new AssertionError();
@@ -404,7 +424,7 @@ public final class InjectionTest {
       @Inject RandomAccess randomAccess;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -416,12 +436,30 @@ public final class InjectionTest {
     }
   }
 
+  @Test public void objectGraphGetInterface() {
+    final Runnable runnable = new Runnable() {
+      @Override public void run() {
+      }
+    };
+
+    @Module(injects = Runnable.class)
+    class TestModule {
+      @Provides Runnable provideRunnable() {
+        return runnable;
+      }
+    }
+
+    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    graph.validate();
+    assertThat(graph.get(Runnable.class)).isSameAs(runnable);
+  }
+
   @Test public void noProvideBindingsForAbstractClasses() {
     class TestEntryPoint {
       @Inject AbstractList<?> abstractList;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
@@ -452,7 +490,7 @@ public final class InjectionTest {
       @Inject ExtendsParameterizedType extendsParameterizedType;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
@@ -469,7 +507,7 @@ public final class InjectionTest {
       @Inject List<String> listOfStrings;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides List<String> provideList() {
         return Arrays.asList("a", "b");
@@ -486,7 +524,7 @@ public final class InjectionTest {
       @Inject List<? extends Number> listOfNumbers;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides List<? extends Number> provideList() {
         return Arrays.asList(1, 2);
@@ -510,7 +548,7 @@ public final class InjectionTest {
       @Inject Parameterized<Long> parameterized;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
@@ -536,7 +574,7 @@ public final class InjectionTest {
   @Test public void getInstance() {
     final AtomicInteger next = new AtomicInteger(0);
 
-    @Module(entryPoints = Integer.class)
+    @Module(injects = Integer.class)
     class TestModule {
       @Provides Integer provideInteger() {
         return next.getAndIncrement();
@@ -544,8 +582,8 @@ public final class InjectionTest {
     }
 
     ObjectGraph graph = ObjectGraph.create(new TestModule());
-    assertEquals(0, (int) graph.get(Integer.class));
-    assertEquals(1, (int) graph.get(Integer.class));
+    assertThat((int) graph.get(Integer.class)).isEqualTo(0);
+    assertThat((int) graph.get(Integer.class)).isEqualTo(1);
   }
 
   @Test public void getInstanceRequiresEntryPoint() {
@@ -565,7 +603,7 @@ public final class InjectionTest {
   }
 
   @Test public void getInstanceOfPrimitive() {
-    @Module(entryPoints = int.class)
+    @Module(injects = int.class)
     class TestModule {
       @Provides int provideInt() {
         return 1;
@@ -577,7 +615,7 @@ public final class InjectionTest {
   }
 
   @Test public void getInstanceOfArray() {
-    @Module(entryPoints = int[].class)
+    @Module(injects = int[].class)
     class TestModule {
       @Provides int[] provideIntArray() {
         return new int[] { 1, 2, 3 };
@@ -593,7 +631,7 @@ public final class InjectionTest {
       @Inject String s;
     }
 
-    @Module(entryPoints = BoundTwoWays.class)
+    @Module(injects = BoundTwoWays.class)
     class TestModule {
       @Provides
       BoundTwoWays provideBoundTwoWays() {
@@ -622,7 +660,7 @@ public final class InjectionTest {
   }
 
   @Test public void entryPointNeedsNoInjectAnnotation() {
-    @Module(entryPoints = NoInjections.class)
+    @Module(injects = NoInjections.class)
     class TestModule {
     }
 
@@ -636,7 +674,7 @@ public final class InjectionTest {
   }
 
   @Test public void cannotGetOnMembersOnlyInjectionPoint() {
-    @Module(entryPoints = InjectMembersOnly.class)
+    @Module(injects = InjectMembersOnly.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
@@ -679,7 +717,7 @@ public final class InjectionTest {
   }
 
   @Test public void twoAtInjectConstructorsIsRejected() {
-    @Module(entryPoints = TwoAtInjectConstructors.class)
+    @Module(injects = TwoAtInjectConstructors.class)
     class TestModule {
       @Provides String provideString() {
         throw new AssertionError();
@@ -699,7 +737,7 @@ public final class InjectionTest {
       @Inject String string;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         throw new ClassCastException("foo");
@@ -721,7 +759,7 @@ public final class InjectionTest {
   }
 
   @Test public void runtimeConstructorExceptionsAreNotWrapped() {
-    @Module(entryPoints = ThrowsOnConstruction.class)
+    @Module(injects = ThrowsOnConstruction.class)
     class TestModule {
     }
 
@@ -737,10 +775,10 @@ public final class InjectionTest {
     @Inject C c; // Singleton.
   }
 
-  @Module(complete=false, entryPoints=C.class)
+  @Module(complete=false, injects =C.class)
   static class RootModule { }
 
-  @Module(addsTo=RootModule.class, entryPoints=SingletonLinkedFromExtension.class)
+  @Module(addsTo=RootModule.class, injects =SingletonLinkedFromExtension.class)
   static class ExtensionModule { }
 
   @Test public void testSingletonLinkingThroughExtensionGraph() {
@@ -750,4 +788,57 @@ public final class InjectionTest {
     assertThat(extension.get(SingletonLinkedFromExtension.class).c).isSameAs(root.get(C.class));
   }
 
+  @Test public void privateFieldsFail() {
+    class Test {
+      @Inject private Object nope;
+    }
+
+    @Module(injects = Test.class)
+    class TestModule {
+      @Provides Object provideObject() {
+        return null;
+      }
+    }
+
+    try {
+      ObjectGraph.create(new TestModule()).inject(new Test());
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Can't inject private field: ");
+    }
+  }
+
+  @Test public void privateConstructorsFail() {
+    class Test {
+      @Inject private Test() {
+      }
+    }
+
+    @Module(injects = Test.class)
+    class TestModule {
+    }
+
+    try {
+      ObjectGraph.create(new TestModule()).get(Test.class);
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Can't inject private constructor: ");
+    }
+  }
+
+  /** https://github.com/square/dagger/issues/231 */
+  @Test public void atInjectAlwaysRequiredForConstruction() {
+    @Module(injects = ArrayList.class)
+    class TestModule {
+    }
+
+    ObjectGraph objectGraph = ObjectGraph.create(new TestModule());
+    objectGraph.validate();
+    try {
+      objectGraph.get(ArrayList.class);
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Unable to create binding for java.util.ArrayList");
+    }
+  }
 }
