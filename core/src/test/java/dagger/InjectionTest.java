@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
+import javax.inject.Scope;
 import javax.inject.Singleton;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -632,8 +633,8 @@ public final class InjectionTest {
   }
 
   static class Parameterized<T> {
-      @Inject String string;
-    }
+    @Inject String string;
+  }
 
   @Test public void noConstructorInjectionsForClassesWithTypeParameters() {
 
@@ -871,7 +872,12 @@ public final class InjectionTest {
   @Module(complete = false, injects = C.class)
   static class RootModule { }
 
-  @Module(addsTo = RootModule.class, injects = SingletonLinkedFromExtension.class)
+  @Scope @interface SmallerScope { }
+
+  @Module(
+      scope = SmallerScope.class,
+      addsTo=RootModule.class,
+      injects = SingletonLinkedFromExtension.class)
   static class ExtensionModule { }
 
   @Test public void testSingletonLinkingThroughExtensionGraph() {

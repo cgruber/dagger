@@ -19,6 +19,7 @@ package dagger;
 import dagger.internal.TestingLoader;
 import java.util.Arrays;
 import javax.inject.Inject;
+import javax.inject.Scope;
 import javax.inject.Singleton;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,9 +27,12 @@ import org.junit.runners.JUnit4;
 
 import static org.fest.assertions.Assertions.assertThat;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 @RunWith(JUnit4.class)
 public final class ExtensionTest {
+  @Scope @interface SmallerScope { }
+
   @Singleton
   static class A {
     @Inject A() {}
@@ -52,7 +56,7 @@ public final class ExtensionTest {
 
   @Module(injects = { A.class, B.class }) static class RootModule { }
 
-  @Module(addsTo = RootModule.class, injects = { C.class, D.class })
+  @Module(scope = SmallerScope.class, addsTo = RootModule.class, injects = { C.class, D.class })
   static class ExtensionModule { }
 
   @Test public void basicExtension() {
@@ -106,6 +110,7 @@ public final class ExtensionTest {
   private void assertFailInjectNotRegistered(ObjectGraph graph, Class<?> clazz) {
     try {
       assertThat(graph.get(clazz)).isNull();
+      fail("Expected injection failure.");
     } catch (IllegalArgumentException e) {
       assertThat(e.getMessage()).contains("No inject");
     }

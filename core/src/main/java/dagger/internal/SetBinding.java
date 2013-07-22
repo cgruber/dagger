@@ -68,7 +68,7 @@ public final class SetBinding<T> extends Binding<Set<T>> {
    * for traceability.
    */
   public SetBinding(String key, Object requiredBy) {
-    super(key, null, false, requiredBy);
+    super(key, null, null, requiredBy);
     parent = null;
     contributors = new ArrayList<Binding<?>>();
   }
@@ -78,7 +78,7 @@ public final class SetBinding<T> extends Binding<Set<T>> {
    * original {@code SetBinding}.
    */
   public SetBinding(SetBinding<T> original) {
-    super(original.provideKey, null, false, original.requiredBy);
+    super(original.provideKey, null, null, original.requiredBy);
     parent = original;
     this.setLibrary(original.library());
     this.setDependedOn(original.dependedOn());

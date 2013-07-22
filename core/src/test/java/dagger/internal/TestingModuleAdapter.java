@@ -24,9 +24,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import javax.inject.Provider;
-import javax.inject.Singleton;
+import javax.inject.Scope;
 
 //TODO: Reduce the complexity of this and/or replace with a mock or fake.
 public class TestingModuleAdapter<M> extends ModuleAdapter<M> {
@@ -38,7 +40,8 @@ public class TestingModuleAdapter<M> extends ModuleAdapter<M> {
         annotation.overrides(),
         annotation.includes(),
         annotation.complete(),
-        annotation.library());
+        annotation.library(),
+        annotation.scope());
   }
 
   private static String[] injectableTypesToKeys(Class<?>[] injectableTypes) {
@@ -157,7 +160,7 @@ public class TestingModuleAdapter<M> extends ModuleAdapter<M> {
 
     public ReflectiveProvidesBinding(Method method, String key, String moduleClass,
         Object instance, boolean library) {
-      super(key, method.isAnnotationPresent(Singleton.class), moduleClass, method.getName());
+      super(key, getScopeForType(method), moduleClass, method.getName());
       this.method = method;
       this.instance = instance;
       method.setAccessible(true);
@@ -199,6 +202,25 @@ public class TestingModuleAdapter<M> extends ModuleAdapter<M> {
 
     @Override public void injectMembers(T t) {
       throw new AssertionError("Provides method bindings are not MembersInjectors");
+    }
+  }
+
+  private static Class<? extends Annotation> getScopeForType(Method method) {
+    List<Class<? extends Annotation>> scopes = new ArrayList<Class<? extends Annotation>>(1);
+    for (Annotation a : method.getAnnotations()) {
+      Class<? extends Annotation> current = a.annotationType();
+      if (current.isAnnotationPresent(Scope.class)) {
+        scopes.add(current);
+      }
+    }
+    switch (scopes.size()) {
+    case 0:
+      return null;
+    case 1:
+      return scopes.get(0);
+    default:
+      throw new IllegalStateException(
+          "More than one scope annotation found on " + method.getName() + ": " + scopes);
     }
   }
 }

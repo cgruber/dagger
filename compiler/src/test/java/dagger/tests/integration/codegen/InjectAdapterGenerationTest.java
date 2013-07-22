@@ -33,6 +33,7 @@ public final class InjectAdapterGenerationTest {
     JavaFileObject sourceFile = JavaFileObjects.forSourceString("Basic", Joiner.on("\n").join(
         "import dagger.Module;",
         "import javax.inject.Inject;",
+        "import javax.inject.Singleton;",
         "class Basic {",
         "  static class A { @Inject A() { } }",
         "  @Module(injects = A.class)",
@@ -42,6 +43,7 @@ public final class InjectAdapterGenerationTest {
     JavaFileObject expectedModuleAdapter =
         JavaFileObjects.forSourceString("Basic$AModule$$ModuleAdapter", Joiner.on("\n").join(
             "import dagger.internal.ModuleAdapter;",
+            "import javax.inject.Singleton;",
             "public final class Basic$AModule$$ModuleAdapter",
             "    extends ModuleAdapter<Basic.AModule> {",
             "  private static final String[] INJECTS = {\"members/Basic$A\"};",
@@ -49,7 +51,7 @@ public final class InjectAdapterGenerationTest {
             "  private static final Class<?>[] INCLUDES = {};",
             "  public Basic$AModule$$ModuleAdapter() {",
             "    super(Basic.AModule.class, INJECTS, STATIC_INJECTIONS, false, INCLUDES,",
-            "      true, false);",
+            "      true, false, Singleton.class);",
             "  }",
             "  @Override public Basic.AModule newModule() {",
             "    return new Basic.AModule();",
@@ -63,7 +65,7 @@ public final class InjectAdapterGenerationTest {
             "public final class Basic$A$$InjectAdapter",
             "    extends Binding<Basic.A> implements Provider<Basic.A> {",
             "  public Basic$A$$InjectAdapter() {",
-            "    super(\"Basic$A\", \"members/Basic$A\", NOT_SINGLETON, Basic.A.class);",
+            "    super(\"Basic$A\", \"members/Basic$A\", null, Basic.A.class);",
             "  }",
             "  @Override public Basic.A get() {",
             "    Basic.A result = new Basic.A();",

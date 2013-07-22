@@ -20,6 +20,7 @@ import dagger.internal.TestingLoader;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
+import javax.inject.Scope;
 import javax.inject.Singleton;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,6 +34,8 @@ import static org.junit.Assert.fail;
 
 @RunWith(JUnit4.class)
 public final class ExtensionWithSetBindingsTest {
+  @Scope @interface SmallerScope { }
+
   private static final AtomicInteger counter = new AtomicInteger(0);
 
   @Singleton
@@ -51,7 +54,7 @@ public final class ExtensionWithSetBindingsTest {
     @Provides(type=SET) @Singleton Integer provideB() { return counter.getAndIncrement(); }
   }
 
-  @Module(addsTo = RootModule.class, injects = Main.class )
+  @Module(scope = SmallerScope.class, addsTo = RootModule.class, injects = Main.class )
   static class ExtensionModule {
     @Provides(type=SET) @Singleton Integer provideC() { return counter.getAndIncrement(); }
     @Provides(type=SET) @Singleton Integer provideD() { return counter.getAndIncrement(); }
@@ -82,7 +85,7 @@ public final class ExtensionWithSetBindingsTest {
     assertThat(main2.ints).containsOnly(0, 1, 4, 5);
   }
 
-  @Module(includes = ExtensionModule.class, overrides = true)
+  @Module(scope = SmallerScope.class, includes = ExtensionModule.class, overrides = true)
   static class TestModule {
     @Provides(type=SET) @Singleton Integer provide9999() { return 9999; }
   }

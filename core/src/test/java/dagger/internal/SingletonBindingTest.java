@@ -1,5 +1,6 @@
 /**
  * Copyright (C) 2013 Square, Inc.
+ * Copyright (C) 2013 Google, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +17,12 @@
 
 package dagger.internal;
 
+import javax.inject.Singleton;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
 import static org.fest.assertions.Assertions.assertThat;
 
 @RunWith(JUnit4.class)
@@ -33,7 +36,7 @@ public final class SingletonBindingTest {
   }
 
   @Test public void testSingletonBindingIsSingleton() {
-    assertThat(singletonBinding.isSingleton()).isTrue();
+    assertThat(singletonBinding.isScoped()).isTrue();
   }
 
   // This next batch of tests validates that SingletonBinding consistently delegates to the wrapped binding for state.
@@ -69,7 +72,7 @@ public final class SingletonBindingTest {
 
   private static class StringBinding extends Binding<String> {
     private StringBinding() {
-      super("dummy", "dummy", true, "dummy"); // 3rd arg true => singleton
+      super("dummy", "dummy", Singleton.class, "dummy"); // 3rd arg true => singleton
     }
 
   }

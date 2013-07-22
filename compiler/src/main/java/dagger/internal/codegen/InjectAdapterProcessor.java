@@ -21,7 +21,11 @@ import dagger.MembersInjector;
 import dagger.internal.Binding;
 import dagger.internal.Linker;
 import dagger.internal.StaticInjection;
+import dagger.internal.codegen.Util.CodeGenerationIncompleteException;
 import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -35,7 +39,6 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.inject.Inject;
 import javax.inject.Provider;
-import javax.inject.Singleton;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -89,6 +92,8 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
       if (!missingDependentClasses) {
         try {
           generateInjectionsForClass(injectedClass);
+        } catch (CodeGenerationIncompleteException e) {
+          continue; // Upstream code did not compile, let it pass through and try again next time.
         } catch (IOException e) {
           error("Code gen failed: " + e, injectedClass.type);
         }
@@ -104,11 +109,26 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
 
   private void generateInjectionsForClass(InjectedClass injectedClass) throws IOException {
     if (injectedClass.constructor != null || !injectedClass.fields.isEmpty()) {
-      generateInjectAdapter(injectedClass.type, injectedClass.constructor, injectedClass.fields);
+      StringWriter stringWriter = new StringWriter();
+      generateInjectAdapter(stringWriter, injectedClass.type, injectedClass.constructor,
+          injectedClass.fields);
+      writeSourceToFile(stringWriter, adapterName(injectedClass.type, INJECT_ADAPTER_SUFFIX),
+          injectedClass.type);
     }
     if (!injectedClass.staticFields.isEmpty()) {
-      generateStaticInjection(injectedClass.type, injectedClass.staticFields);
+      StringWriter stringWriter = new StringWriter();
+      generateStaticInjection(stringWriter, injectedClass.type, injectedClass.staticFields);
+      writeSourceToFile(stringWriter, adapterName(injectedClass.type, STATIC_INJECTION_SUFFIX),
+          injectedClass.type);
     }
+  }
+
+  private void writeSourceToFile(StringWriter stringWriter, String adapterName,
+      TypeElement type) throws IOException {
+    JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(adapterName, type);
+    Writer sourceWriter = sourceFile.openWriter();
+    sourceWriter.append(stringWriter.getBuffer());
+    sourceWriter.close();
   }
 
   /**
@@ -236,15 +256,15 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
    * @param constructor the injectable constructor, or null if this binding
    *     supports members injection only.
    */
-  private void generateInjectAdapter(TypeElement type, ExecutableElement constructor,
-      List<Element> fields) throws IOException {
+  private void generateInjectAdapter(Writer ioWriter, TypeElement type,
+      ExecutableElement constructor, List<Element> fields) throws IOException {
     String packageName = getPackage(type).getQualifiedName().toString();
     String strippedTypeName =
         strippedTypeName(type.getQualifiedName().toString(), packageName);
     TypeMirror supertype = getApplicationSupertype(type);
     String adapterName = adapterName(type, INJECT_ADAPTER_SUFFIX);
-    JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(adapterName, type);
-    JavaWriter writer = new JavaWriter(sourceFile.openWriter());
+    JavaWriter writer = new JavaWriter(ioWriter);
+    Class<? extends Annotation> scope = Util.getScopeAnnotation(type);
     boolean isAbstract = type.getModifiers().contains(ABSTRACT);
     boolean injectMembers = !fields.isEmpty() || supertype != null;
     boolean disambiguateFields = !fields.isEmpty()
@@ -255,7 +275,7 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
 
     writer.emitSingleLineComment(AdapterJavadocs.GENERATED_BY_DAGGER);
     writer.emitPackage(packageName);
-    writer.emitImports(findImports(dependent, injectMembers, constructor != null));
+    writer.emitImports(findImports(dependent, injectMembers, constructor != null, scope));
     writer.emitEmptyLine();
     writer.emitJavadoc(bindingTypeDocs(strippedTypeName, isAbstract, injectMembers, dependent));
     writer.beginType(adapterName, "class", EnumSet.of(PUBLIC, FINAL),
@@ -269,7 +289,8 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
       writeSupertypeInjectorField(writer, supertype);
     }
     writer.emitEmptyLine();
-    writeInjectAdapterConstructor(writer, constructor, type, strippedTypeName, adapterName);
+    writeInjectAdapterConstructor(writer, constructor, type, strippedTypeName, adapterName,
+        (scope == null) ? "null" : writer.compressType(scope.getName()) + ".class");
     if (dependent) {
       writeAttachMethod(writer, constructor, fields, disambiguateFields, strippedTypeName,
           supertype, true);
@@ -288,12 +309,11 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
   /**
    * Write a companion class for {@code type} that extends {@link StaticInjection}.
    */
-  private void generateStaticInjection(TypeElement type, List<Element> fields) throws IOException {
+  private void generateStaticInjection(Writer ioWriter, TypeElement type, List<Element> fields)
+      throws IOException {
     String typeName = type.getQualifiedName().toString();
     String adapterName = adapterName(type, STATIC_INJECTION_SUFFIX);
-    JavaFileObject sourceFile = processingEnv.getFiler()
-        .createSourceFile(adapterName, type);
-    JavaWriter writer = new JavaWriter(sourceFile.openWriter());
+    JavaWriter writer = new JavaWriter(ioWriter);
 
     writer.emitSingleLineComment(AdapterJavadocs.GENERATED_BY_DAGGER);
     writer.emitPackage(getPackage(type).getQualifiedName().toString());
@@ -338,15 +358,14 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
   }
 
   private void writeInjectAdapterConstructor(JavaWriter writer, ExecutableElement constructor,
-      TypeElement type, String strippedTypeName, String adapterName) throws IOException {
+      TypeElement type, String strippedTypeName, String adapterName, String scope)
+          throws IOException {
     writer.beginMethod(null, adapterName, EnumSet.of(PUBLIC));
     String key = (constructor != null)
         ? JavaWriter.stringLiteral(GeneratorKeys.get(type.asType()))
         : null;
     String membersKey = JavaWriter.stringLiteral(GeneratorKeys.rawMembersKey(type.asType()));
-    boolean singleton = type.getAnnotation(Singleton.class) != null;
-    writer.emitStatement("super(%s, %s, %s, %s.class)",
-        key, membersKey, (singleton ? "IS_SINGLETON" : "NOT_SINGLETON"), strippedTypeName);
+    writer.emitStatement("super(%s, %s, %s, %s.class)", key, membersKey, scope, strippedTypeName);
     writer.endMethod();
     writer.emitEmptyLine();
   }
@@ -473,7 +492,8 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
     writer.emitEmptyLine();
   }
 
-  private Set<String> findImports(boolean dependent, boolean injectMembers, boolean isProvider) {
+  private Set<String> findImports(boolean dependent, boolean injectMembers, boolean isProvider,
+      Class<? extends Annotation> scope) {
     Set<String> imports = new LinkedHashSet<String>();
     imports.add(Binding.class.getCanonicalName());
     if (dependent) {
@@ -482,6 +502,7 @@ public final class InjectAdapterProcessor extends AbstractProcessor {
     }
     if (injectMembers) imports.add(MembersInjector.class.getCanonicalName());
     if (isProvider) imports.add(Provider.class.getCanonicalName());
+    if (scope != null) imports.add(scope.getName());
     return imports;
   }
 

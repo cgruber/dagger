@@ -26,7 +26,7 @@ final class BuiltInBinding<T> extends Binding<T> {
 
   public BuiltInBinding(
       String key, Object requiredBy, ClassLoader classLoader, String delegateKey) {
-    super(key, null, false, requiredBy);
+    super(key, null, null, requiredBy);
     this.classLoader = classLoader;
     this.delegateKey = delegateKey;
   }

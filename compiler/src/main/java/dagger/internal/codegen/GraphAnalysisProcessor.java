@@ -15,6 +15,9 @@
  */
 package dagger.internal.codegen;
 
+import com.google.common.base.Objects;
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Multimap;
 import dagger.Module;
 import dagger.Provides;
 import dagger.internal.Binding;
@@ -29,20 +32,17 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.inject.Singleton;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -104,16 +104,16 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     for (Element element : modules) {
       Map<String, Object> annotation = null;
       try {
-        annotation = getAnnotation(Module.class, element);
+        annotation = getAnnotation(Module.class, element, true);
+      } catch (ModuleValidationException e) {
+        error("Missing @Module annotation.", e.source);
+        continue;
       } catch (CodeGenerationIncompleteException e) {
         continue; // skip this element. An up-stream compiler error is in play.
       }
 
       TypeElement moduleType = (TypeElement) element;
-      if (annotation == null) {
-        error("Missing @Module annotation.", moduleType);
-        continue;
-      }
+
       if (annotation.get("complete").equals(Boolean.TRUE)) {
         Map<String, Binding<?>> bindings;
         try {
@@ -129,8 +129,10 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
           if (ERROR_NAMES_TO_PROPAGATE.contains(e.getClass().getName())) {
             throw e;
           }
+          StringWriter sw = new StringWriter();
+          e.printStackTrace(new PrintWriter(sw));
           error("Unknown error " + e.getClass().getName() + " thrown by javac in graph validation: "
-              + e.getMessage(), moduleType);
+              + e.getMessage() + sw, moduleType);
           continue;
         }
         try {
@@ -162,8 +164,9 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
 
   private Map<String, Binding<?>> processCompleteModule(TypeElement rootModule,
       boolean ignoreCompletenessErrors) {
-    Map<String, TypeElement> allModules = new LinkedHashMap<String, TypeElement>();
-    collectIncludesRecursively(rootModule, allModules, new LinkedList<String>());
+
+    Iterable<TypeElement> modules = collectAndValidateModules(rootModule);
+
     ArrayList<GraphAnalysisStaticInjection> staticInjections =
         new ArrayList<GraphAnalysisStaticInjection>();
 
@@ -184,8 +187,8 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
           throw new IllegalStateException("Module overrides cannot contribute set bindings.");
         }
       };
-      for (TypeElement module : allModules.values()) {
-        Map<String, Object> annotation = getAnnotation(Module.class, module);
+      for (TypeElement module : modules) {
+        Map<String, Object> annotation = getAnnotation(Module.class, module, true);
         boolean overrides = (Boolean) annotation.get("overrides");
         boolean library = (Boolean) annotation.get("library");
         BindingsGroup addTo = overrides ? overrideBindings : baseBindings;
@@ -274,55 +277,124 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     }
   }
 
+  private Types types() {
+    return processingEnv.getTypeUtils();
+  }
+
   private Elements elements() {
     return processingEnv.getElementUtils();
   }
 
-  void collectIncludesRecursively(
-      TypeElement module, Map<String, TypeElement> result, Deque<String> path) {
-    Map<String, Object> annotation = getAnnotation(Module.class, module);
-    if (annotation == null) {
-      // TODO(tbroyer): pass annotation information
-      throw new ModuleValidationException("No @Module on " + module, module);
-    }
+  private Iterable<TypeElement> collectAndValidateModules(TypeElement module) {
+    Modules modules = new Modules(module);
+    collectModulesRecursively(module, modules, false);
+    return modules.processedModules;
+  }
 
-    // Add the module.
-    String name = module.getQualifiedName().toString();
+  private void collectModulesRecursively(TypeElement module, Modules modules, boolean ancestor) {
+    if (ancestor && modules.moduleStack.isEmpty()) {
+      throw new AssertionError();
+    }
+    /*
+     * Algorithm:
+     * √ 0. if module completely processed, return
+     * √ 1. extract scope from annotation
+     * √ 2. validate scope and add it if called as an ancestor reference (addsTo).
+     * √ 3. validate module not already on module stack.
+     * √ 4. add module to scope->module multimap
+     *   5. add scope to module->scope map.
+     * √ 6. for each module in includes -> recurse to step 1
+     * √ 7. for addsTo if any -> recurse to step 1
+     * √ 8. mark module as processed.
+     */
+    if (!modules.processedModules.contains(module)) {
+      Map<String, Object> annotation = getAnnotation(Module.class, module, true);
+      throwCycleErrorIfInPath(module, modules.moduleStack, "Module Inclusion Cycle: ", module);
+
+      String scope = Util.getScopeFromModule(annotation);
+      if (modules.moduleStack.isEmpty()) {
+        modules.scopeStack.push(scope);
+      } else {
+        if (ancestor) {
+          if (modules.scopeStack.peek().equals(scope)) {
+            String error = String.format(
+                "Cannot use addsTo references with the same scope. "
+                + "Either use a longer-lived scope, or use includes=");
+            throw new ModuleValidationException(error, modules.moduleStack.pop());
+          }
+          if (modules.scopeStack.contains("javax.inject.Singleton")) {
+            throw new ModuleValidationException(
+                "Cannot add a module with longer-lived scope than Singleton.",
+                modules.moduleStack.pop());
+          }
+          throwCycleErrorIfInPath(module, modules.scopeStack, "Scope cycle: ", scope);
+          modules.scopeStack.push(scope);
+        } else {
+          if (!modules.scopeStack.peek().equals(scope)) {
+            throw new ModuleValidationException(
+                "Cannot include a module with a different scope. Did you mean addsTo?",
+                    modules.moduleStack.pop());
+          }
+        }
+      }
+
+      modules.scopesToModules.put(scope, module);
+      modules.moduleStack.push(module);
+
+      for (Object include : (Object[]) annotation.get("includes")) {
+        String label = "included module";
+        if (include instanceof TypeMirror) {
+          TypeElement includedModule = (TypeElement) types().asElement((TypeMirror) include);
+          collectModulesRecursively(includedModule, modules, false);
+        } else {
+          // TODO(tbroyer): pass annotation information
+          processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+              "Unexpected value for " + label + ": " + include + " in " + module, module);
+        }
+      }
+
+      if (annotation.containsKey("addsTo")) {
+        String label = "addsTo";
+        Object addsTo = annotation.get("addsTo");
+        if (addsTo instanceof TypeMirror) {
+          TypeElement includedModule = (TypeElement) types().asElement((TypeMirror) addsTo);
+
+          collectModulesRecursively(includedModule, modules, true);
+
+        } else {
+          // TODO(tbroyer): pass annotation information
+          processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+              "Unexpected value for " + label + ": " + addsTo + " in " + module, module);
+        }
+
+      }
+
+      modules.moduleStack.pop();
+      if (modules.moduleStack.isEmpty() || ancestor) {
+        modules.scopeStack.pop();
+      }
+      modules.processedModules.add(module);
+    }
+  }
+
+  private <T> void throwCycleErrorIfInPath(TypeElement module, Deque<T> path,
+      String messagePrefix, T name) {
     if (path.contains(name)) {
-      StringBuilder message = new StringBuilder("Module Inclusion Cycle: ");
+      StringBuilder message = new StringBuilder(messagePrefix);
       if (path.size() == 1) {
-        message.append(name).append(" includes itself directly.");
+        message.append(name).append(" refers to itself directly.");
       } else {
         String current = null;
-        String includer = name;
+        String includer = name.toString();
         for (int i = 0; path.size() > 0; i++) {
           current = includer;
-          includer = path.pop();
+          includer = path.pop().toString();
           message.append("\n").append(i).append(". ")
               .append(current).append(" included by ").append(includer);
         }
         message.append("\n0. ").append(name);
       }
       throw new ModuleValidationException(message.toString(), module);
-    }
-    result.put(name, module);
-
-    // Recurse for each included module.
-    Types types = processingEnv.getTypeUtils();
-    List<Object> seedModules = new ArrayList<Object>();
-    seedModules.addAll(Arrays.asList((Object[]) annotation.get("includes")));
-    if (!annotation.get("addsTo").equals(Void.class)) seedModules.add(annotation.get("addsTo"));
-    for (Object include : seedModules) {
-      if (!(include instanceof TypeMirror)) {
-        // TODO(tbroyer): pass annotation information
-        processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
-            "Unexpected value for include: " + include + " in " + module, module);
-        continue;
-      }
-      TypeElement includedModule = (TypeElement) types.asElement((TypeMirror) include);
-      path.push(name);
-      collectIncludesRecursively(includedModule, result, path);
-      path.pop();
     }
   }
 
@@ -331,8 +403,8 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     private final Binding<?>[] parameters;
 
     protected ProviderMethodBinding(String provideKey, ExecutableElement method, boolean library) {
-      super(provideKey, method.getAnnotation(Singleton.class) != null,
-          className(method), method.getSimpleName().toString());
+      super(provideKey, Util.getScopeAnnotation(method), className(method),
+          method.getSimpleName().toString());
       this.method = method;
       this.parameters = new Binding[method.getParameters().size()];
       setLibrary(library);
@@ -377,12 +449,32 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     dotWriter.close();
   }
 
+  private static class Modules {
+    final TypeElement rootModule;
+    final Deque<String> scopeStack = new ArrayDeque<String>();
+    final Deque<TypeElement> moduleStack = new ArrayDeque<TypeElement>();
+    final Multimap<String, TypeElement> scopesToModules = LinkedHashMultimap.create();
+    //final Map<TypeElement, String> modulesToScope = new LinkedHashMap<TypeElement, String>();
+    final Set<TypeElement> processedModules = new HashSet<TypeElement>();
+    Modules(TypeElement rootModule) {
+      this.rootModule = rootModule;
+    }
+    @Override public String toString() {
+      return Objects.toStringHelper(this).omitNullValues()
+          .add("scopeStack", scopeStack)
+          .add("moduleStack", moduleStack)
+          .add("processed", processedModules)
+          .add("root", rootModule)
+          .toString();
+    }
+  }
+
   static class ModuleValidationException extends IllegalStateException {
     final Element source;
 
-    public ModuleValidationException(String message, Element source) {
+    public ModuleValidationException(String message, Element element) {
       super(message);
-      this.source = source;
+      this.source = element;
     }
   }
 }

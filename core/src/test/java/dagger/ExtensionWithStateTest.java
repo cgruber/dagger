@@ -16,6 +16,8 @@
  */
 package dagger;
 
+import javax.inject.Scope;
+
 import dagger.internal.TestingLoader;
 import javax.inject.Inject;
 import org.junit.Test;
@@ -26,6 +28,8 @@ import static org.fest.assertions.Assertions.assertThat;
 
 @RunWith(JUnit4.class)
 public final class ExtensionWithStateTest {
+  @Scope @interface SmallerScope { }
+
   static class A { }
 
   static class B {
@@ -44,7 +48,7 @@ public final class ExtensionWithStateTest {
     @Provides A provideA() { return a; }
   }
 
-  @Module(addsTo = RootModule.class, injects = { B.class })
+  @Module(scope = SmallerScope.class, addsTo = RootModule.class, injects = { B.class })
   static class ExtensionModule { }
 
   @Test public void basicInjectionWithExtension() {

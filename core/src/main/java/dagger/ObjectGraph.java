@@ -28,11 +28,15 @@ import dagger.internal.ProblemDetector;
 import dagger.internal.SetBinding;
 import dagger.internal.StaticInjection;
 import dagger.internal.ThrowingErrorHandler;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import javax.inject.Singleton;
 
 
 /**
@@ -142,14 +146,17 @@ public abstract class ObjectGraph {
     private final Map<Class<?>, StaticInjection> staticInjections;
     private final Map<String, Class<?>> injectableTypes;
     private final List<SetBinding<?>> setBindings;
+    private final Class<? extends Annotation> scope;
 
     DaggerObjectGraph(DaggerObjectGraph base,
+        Class<? extends Annotation> scope,
         Linker linker,
         Loader plugin,
         Map<Class<?>, StaticInjection> staticInjections,
         Map<String, Class<?>> injectableTypes,
         List<SetBinding<?>> setBindings) {
 
+      this.scope = scope;
       this.base = base;
       this.linker = checkNotNull(linker, "linker");
       this.plugin = checkNotNull(plugin, "plugin");
@@ -172,7 +179,11 @@ public abstract class ObjectGraph {
       BindingsGroup overrideBindings = new OverridesBindings();
 
       Map<ModuleAdapter<?>, Object> loadedModules = Modules.loadModules(plugin, modules);
+      Class<? extends Annotation> scope = null;
+      Set<Class<? extends Annotation>> parentScopes = parentScopes(base);
+
       for (Entry<ModuleAdapter<?>, Object> loadedModule : loadedModules.entrySet()) {
+        scope = validateScope(base == null, scope, loadedModule.getKey(), parentScopes);
         ModuleAdapter<Object> moduleAdapter = (ModuleAdapter<Object>) loadedModule.getKey();
         for (int i = 0; i < moduleAdapter.injectableTypes.length; i++) {
           injectableTypes.put(moduleAdapter.injectableTypes[i], moduleAdapter.moduleClass);
@@ -196,7 +207,65 @@ public abstract class ObjectGraph {
       linker.installBindings(overrideBindings);
 
       return new DaggerObjectGraph(
-          base, linker, plugin, staticInjections, injectableTypes, baseBindings.setBindings);
+          base, scope, linker, plugin, staticInjections, injectableTypes, baseBindings.setBindings);
+    }
+
+    private Class<? extends Annotation> getScope() {
+      return this.scope;
+    }
+
+    private static Set<Class<? extends Annotation>> parentScopes(DaggerObjectGraph graph) {
+      Set<Class<? extends Annotation>> scopes = new LinkedHashSet<Class<? extends Annotation>>();
+      recursivelyFetchParentScopes(graph, scopes);
+      return scopes;
+    }
+
+    private static void recursivelyFetchParentScopes(
+        DaggerObjectGraph graph, Set<Class<? extends Annotation>> scopes) {
+      if (graph != null) {
+        if (graph.base != null) {
+          recursivelyFetchParentScopes(graph.base, scopes);
+        }
+        if (graph.getScope() == null) {
+          throw new AssertionError("Graph not constrained by scope!");
+        }
+        boolean unseen = scopes.add(graph.getScope());
+        if (!unseen) {
+          throw new IllegalStateException("Cannot arrange scopes in a cycle. "
+              + graph.getScope() + " already contained in " + scopes);
+        }
+      }
+    }
+
+    /**
+     * Validates the current scope to ensure it is neither contained in the parent scope
+     * hierarchy (scope cycle) nor different than the already-seen scopes from modules in
+     * this graph.
+     */
+    private static Class<? extends Annotation> validateScope(
+        boolean isRootGraph,
+        Class<? extends Annotation> previousScope,
+        ModuleAdapter<?> adapter,
+        Set<Class<? extends Annotation>> constraints) {
+      Class<? extends Annotation> currentScope = adapter.scopeConstraint;
+      if (isRootGraph && !currentScope.equals(Singleton.class)) {
+        throw new IllegalStateException("Root graph modules may only be constrained to @Singleton");
+      }
+      if (currentScope == null) {
+        throw new AssertionError("Cannot validate a null scope.");
+      }
+      if (constraints.contains(currentScope)) {
+        throw new IllegalStateException(currentScope.getName()
+            + " found in "
+            + adapter.moduleClass.getName()
+            + " already constrains a parent graph.  Scopes must be arranged hierarchically.");
+      }
+      if (previousScope != null && !currentScope.equals(previousScope)) {
+        throw new IllegalStateException(""
+            + "Included modules must use the same scope constraint. Found: "
+            + previousScope + ", " + currentScope);
+      }
+      return currentScope;
     }
 
     @Override public ObjectGraph plus(Object... modules) {

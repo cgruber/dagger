@@ -17,11 +17,15 @@
 package dagger.internal.codegen;
 
 import dagger.internal.Keys;
+import dagger.internal.codegen.GraphAnalysisProcessor.ModuleValidationException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.inject.Scope;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.AnnotationValueVisitor;
@@ -63,6 +67,37 @@ final class Util {
     TypeMirror supertype = type.getSuperclass();
     return Keys.isPlatformType(supertype.toString()) ? null : supertype;
   }
+
+  /**
+   * Returns a scoping annotation class if the given element is annotated with a single such
+   * annotation, or null if it is not annotated.  This method will throw if more than one
+   * such annotation is present.
+   */
+  public static Class<? extends Annotation> getScopeAnnotation(Element typeOrMethod) {
+    List<Class<? extends Annotation>> scopes = new ArrayList<Class<? extends Annotation>>(1);
+    for (AnnotationMirror mirror : typeOrMethod.getAnnotationMirrors()) {
+      DeclaredType annotation = mirror.getAnnotationType();
+      if (annotation.asElement().getAnnotation(Scope.class) != null) {
+        // TODO(cgruber): Throw on duplicate scope annotations.
+        try {
+          scopes.add((Class<? extends Annotation>) GraphAnalysisProcessor.class.getClassLoader()
+              .loadClass(annotation.toString()));
+        } catch (ClassNotFoundException cnfe) {
+          throw new CodeGenerationIncompleteException("Class " + annotation + " not found.");
+        }
+      }
+    }
+    switch (scopes.size()) {
+      case 0:
+        return null;
+      case 1:
+        return scopes.get(0);
+      default:
+        throw new IllegalStateException(
+            "More than one scope annotation found on " + typeOrMethod + ": " + scopes);
+    }
+  }
+
 
   /** Returns a fully qualified class name to complement {@code type}. */
   public static String adapterName(TypeElement typeElement, String suffix) {
@@ -188,7 +223,8 @@ final class Util {
    * the fact that Class and Class[] fields won't work at code generation time.
    * See http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=5089128
    */
-  public static Map<String, Object> getAnnotation(Class<?> annotationType, Element element) {
+  public static Map<String, Object> getAnnotation(Class<?> annotationType, Element element,
+      boolean throwIfNotPresent) {
     for (AnnotationMirror annotation : element.getAnnotationMirrors()) {
       if (!rawTypeToString(annotation.getAnnotationType(), '$')
           .equals(annotationType.getName())) {
@@ -214,8 +250,28 @@ final class Util {
       }
       return result;
     }
+    if (throwIfNotPresent) {
+      // TODO(tbroyer): pass annotation information
+      throw new ModuleValidationException(
+          String.format("No @%v on %v", annotationType.getSimpleName(), element), element);
+    }
+
     return null; // Annotation not found.
   }
+
+  /**
+   * Returns the name of the constraining scope annotation for this module.
+   */
+  public static String getScopeFromModule(Map<String, Object> module) {
+    Object scope = module.get("scope");
+    // This works around java annotation processing environment returning divergent and
+    // incompatible types depending on the state of upstream compilation.
+    if (scope instanceof Class) {
+      return ((Class<?>) scope).getName();
+    }
+    return scope.toString();
+  }
+
 
   /**
    * Returns true if {@code value} can be assigned to {@code expectedClass}.

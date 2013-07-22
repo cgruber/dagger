@@ -15,10 +15,12 @@
  */
 package dagger;
 
+import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import javax.inject.Singleton;
 
 /**
  * Annotates a class that contributes to the object graph.
@@ -92,4 +94,20 @@ public @interface Module {
    * <p>This is intended to help you detect dead code.
    */
   boolean library() default false;
+
+  /**
+   * The scope to which objects in the \{sub\}graph specified by this module
+   * is constrained.  If left unspecified, {@code @Singleton} will be assumed.
+   * However, if a module has scoping annotations (themselves annotated with the
+   * {@link @Scope} JSR-330 annotation), then this graph will consider any objects
+   * with different scopes than the one specified as illegal, and will flag such
+   * objects as compiler errors.
+   *
+   * <p>This can allow the developer to specify specific scopeing annotations for
+   * scope-specific sub-graphs, such as a per-request graph, and ensure that the
+   * objects intended for memoization at the per-request level are not inadvertently
+   * memoized in the per-application graph.
+   *
+   */
+  Class<? extends Annotation> scope() default Singleton.class;
 }

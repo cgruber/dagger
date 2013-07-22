@@ -25,10 +25,12 @@ import dagger.internal.Linker;
 import dagger.internal.ModuleAdapter;
 import dagger.internal.ProvidesBinding;
 import dagger.internal.SetBinding;
+import dagger.internal.codegen.GraphAnalysisProcessor.ModuleValidationException;
 import dagger.internal.codegen.Util.CodeGenerationIncompleteException;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -44,7 +46,6 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.inject.Provider;
-import javax.inject.Singleton;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -104,7 +105,7 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
       try {
         // Attempt to get the annotation. If types are missing, this will throw
         // CodeGenerationIncompleteException.
-        Map<String, Object> parsedAnnotation = getAnnotation(Module.class, type);
+        Map<String, Object> parsedAnnotation = getAnnotation(Module.class, type, true);
 
         //TODO(cgruber): Figure out an initial sizing of the StringWriter.
         StringWriter stringWriter = new StringWriter();
@@ -116,6 +117,8 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
         sourceWriter.close();
       } catch (CodeGenerationIncompleteException e) {
         continue; // A dependent type was not defined, we'll try to catch it on another pass.
+      } catch (ModuleValidationException e) {
+        continue; // The module does not have an annotation on it, but this is reported elsewhere.
       } catch (IOException e) {
         error("Code gen failed: " + e, type);
       }
@@ -249,6 +252,8 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     boolean complete = (Boolean) module.get("complete");
     boolean library = (Boolean) module.get("library");
 
+    String scope = Util.getScopeFromModule(module);
+
     JavaWriter writer = new JavaWriter(ioWriter);
 
     boolean multibindings = checkForMultibindings(providerMethods);
@@ -257,7 +262,7 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     writer.emitSingleLineComment(AdapterJavadocs.GENERATED_BY_DAGGER);
     writer.emitPackage(getPackage(type).getQualifiedName().toString());
     writer.emitImports(
-        findImports(multibindings, !providerMethods.isEmpty(), providerMethodDependencies));
+        findImports(multibindings, !providerMethods.isEmpty(), providerMethodDependencies, scope));
 
     String typeName = type.getQualifiedName().toString();
     writer.emitEmptyLine();
@@ -304,7 +309,8 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     writer.emitEmptyLine();
     writer.beginMethod(null, adapterName, EnumSet.of(PUBLIC));
     writer.emitStatement("super(%s.class, INJECTS, STATIC_INJECTIONS, %s /*overrides*/, "
-        + "INCLUDES, %s /*complete*/, %s /*library*/)", typeName,  overrides, complete, library);
+        + "INCLUDES, %s /*complete*/, %s /*library*/, %s.class)",  writer.compressType(typeName),
+            overrides, complete, library, writer.compressType(scope));
     writer.endMethod();
 
     ExecutableElement noArgsConstructor = getNoArgsConstructor(type);
@@ -367,7 +373,8 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     writer.close();
   }
 
-  private Set<String> findImports(boolean multibindings, boolean providers, boolean dependencies) {
+  private Set<String> findImports(boolean multibindings, boolean providers, boolean dependencies,
+      String ... extras) {
     Set<String> imports = new LinkedHashSet<String>();
     imports.add(ModuleAdapter.class.getCanonicalName());
     if (providers) {
@@ -382,6 +389,11 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     }
     if (multibindings) {
       imports.add(SetBinding.class.getCanonicalName());
+    }
+    for (String extra : extras) {
+      if (extra.contains(".")) { // Ignore added things from default package.
+        imports.add(extra);
+      }
     }
     return imports;
   }
@@ -436,6 +448,7 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
     String className =
         bindingClassName(providerMethod, methodToClassName, methodNameToNextId);
     String returnType = typeToString(providerMethod.getReturnType());
+    Class<? extends Annotation> scope = Util.getScopeAnnotation(providerMethod);
     List<? extends VariableElement> parameters = providerMethod.getParameters();
     boolean dependent = !parameters.isEmpty();
 
@@ -453,10 +466,9 @@ public final class ModuleAdapterProcessor extends AbstractProcessor {
 
     writer.emitEmptyLine();
     writer.beginMethod(null, className, EnumSet.of(PUBLIC), moduleType, "module");
-    boolean singleton = providerMethod.getAnnotation(Singleton.class) != null;
     String key = JavaWriter.stringLiteral(GeneratorKeys.get(providerMethod));
-    writer.emitStatement("super(%s, %s, %s, %s)",
-        key, (singleton ? "IS_SINGLETON" : "NOT_SINGLETON"),
+    writer.emitStatement("super(%s, %s, %s, %s)", key,
+        (scope == null ? "null" : writer.compressType(scope.getName()) + ".class"),
         JavaWriter.stringLiteral(moduleType),
         JavaWriter.stringLiteral(methodName));
     writer.emitStatement("this.module = module");

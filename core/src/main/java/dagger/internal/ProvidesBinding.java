@@ -16,6 +16,8 @@
  */
 package dagger.internal;
 
+import java.lang.annotation.Annotation;
+
 /**
  * A {@code Binding<T>} which delegates to a module method.
  */
@@ -28,9 +30,10 @@ public abstract class ProvidesBinding<T> extends Binding<T> {
    * Creates a new {@code ProvidesBinding} with the given "provides" key, a flag as to whether
    * this binding should be scoped, and the requiredBy object for traceability.
    */
-  public ProvidesBinding(String key, boolean singleton, String moduleClass, String methodName) {
+  public ProvidesBinding(
+      String key, Class<? extends Annotation> scope, String moduleClass, String methodName) {
     // Set requiredBy as fullMethodName to preserve older debugging meaning.
-    super(key, null, singleton, moduleClass + "." + methodName + "()");
+    super(key, null, scope, moduleClass + "." + methodName + "()");
     this.moduleClass = moduleClass;
     this.methodName = methodName;
   }

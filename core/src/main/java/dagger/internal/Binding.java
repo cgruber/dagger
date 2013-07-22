@@ -16,6 +16,7 @@
 package dagger.internal;
 
 import dagger.MembersInjector;
+import java.lang.annotation.Annotation;
 import java.util.Set;
 import javax.inject.Provider;
 
@@ -23,7 +24,7 @@ import javax.inject.Provider;
  * Injects a value of a specific type.
  */
 public abstract class Binding<T> implements Provider<T>, MembersInjector<T> {
-  public static final Binding<Object> UNRESOLVED = new Binding<Object>(null, null, false, null) {
+  public static final Binding<Object> UNRESOLVED = new Binding<Object>(null, null, null, null) {
     @Override public Object get() {
       throw new AssertionError("Unresolved binding should never be called to inject.");
     }
@@ -31,11 +32,6 @@ public abstract class Binding<T> implements Provider<T>, MembersInjector<T> {
       throw new AssertionError("Unresolved binding should never be called to inject.");
     }
   };
-  protected static final boolean IS_SINGLETON = true;
-  protected static final boolean NOT_SINGLETON = false;
-
-  /** Set if the provided instance is always the same object. */
-  private static final int SINGLETON = 1 << 0;
 
   /** Set if this binding's {@link #attach} completed without any missing dependencies. */
   private static final int LINKED = 1 << 1;
@@ -56,20 +52,23 @@ public abstract class Binding<T> implements Provider<T>, MembersInjector<T> {
   /** The key used to inject members of 'T', or null if this binding cannot inject members. */
   public final String membersKey;
 
-  /** Bitfield of states like SINGLETON and LINKED. */
+  /** Bitfield of states like SCOPED and LINKED. */
   private int bits;
 
   public final Object requiredBy;
 
-  protected Binding(String provideKey, String membersKey, boolean singleton, Object requiredBy) {
-    if (singleton && provideKey == null) {
+  final Class<? extends Annotation> scope;
+
+  protected Binding(
+      String provideKey, String membersKey, Class<? extends Annotation> scope, Object requiredBy) {
+    if (scope != null && provideKey == null) {
       throw new InvalidBindingException(Keys.getClassName(membersKey),
           "is exclusively members injected and therefore cannot be scoped");
     }
     this.provideKey = provideKey;
     this.membersKey = membersKey;
     this.requiredBy = requiredBy;
-    this.bits = (singleton ? SINGLETON : 0);
+    this.scope = scope;
   }
 
   /**
@@ -110,8 +109,13 @@ public abstract class Binding<T> implements Provider<T>, MembersInjector<T> {
     return (bits & LINKED) != 0;
   }
 
+  @Deprecated
   boolean isSingleton() {
-    return (bits & SINGLETON) != 0;
+    return isScoped();
+  }
+
+  boolean isScoped() {
+    return scope != null;
   }
 
   public boolean isVisiting() {

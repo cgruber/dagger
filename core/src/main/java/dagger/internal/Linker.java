@@ -314,8 +314,8 @@ public final class Linker {
    * Returns a scoped binding for {@code binding}.
    */
   static <T> Binding<T> scope(final Binding<T> binding) {
-    if (!binding.isSingleton() || binding instanceof SingletonBinding) {
-      return binding; // Default scoped binding or already a scoped binding.
+    if (!binding.isScoped()) {
+      return binding;
     }
     return new SingletonBinding<T>(binding);
   }
@@ -344,7 +344,7 @@ public final class Linker {
     private volatile Object onlyInstance = UNINITIALIZED;
 
     private SingletonBinding(Binding<T> binding) {
-      super(binding.provideKey, binding.membersKey, true, binding.requiredBy);
+      super(binding.provideKey, binding.membersKey, binding.scope, binding.requiredBy);
       this.binding = binding;
     }
 
@@ -408,7 +408,7 @@ public final class Linker {
       binding.setDependedOn(dependedOn);
     }
 
-    @Override protected boolean isSingleton() {
+    @Override protected boolean isScoped() {
       return true;
     }
 
@@ -446,7 +446,7 @@ public final class Linker {
 
     private DeferredBinding(String deferredKey, ClassLoader classLoader, Object requiredBy,
         boolean mustHaveInjections) {
-      super(null, null, false, requiredBy);
+      super(null, null, null, requiredBy);
       this.deferredKey = deferredKey;
       this.classLoader = classLoader;
       this.mustHaveInjections = mustHaveInjections;

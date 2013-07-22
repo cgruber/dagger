@@ -78,7 +78,7 @@ public final class ValidationProcessor extends AbstractProcessor {
 
   private void validateProvides(Element element) {
     if (element.getAnnotation(Provides.class) != null
-        && Util.getAnnotation(Module.class, element.getEnclosingElement()) == null) {
+        && Util.getAnnotation(Module.class, element.getEnclosingElement(), false) == null) {
       error("@Provides methods must be declared in modules: " + elementToString(element), element);
     }
   }

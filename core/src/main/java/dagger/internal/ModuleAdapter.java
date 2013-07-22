@@ -16,6 +16,7 @@
  */
 package dagger.internal;
 
+import java.lang.annotation.Annotation;
 
 /**
  * Extracts bindings from an {@code @Module}-annotated class.
@@ -28,17 +29,20 @@ public abstract class ModuleAdapter<T> {
   public final Class<?>[] includes;
   public final boolean complete;
   public final boolean library;
+  public final Class<? extends Annotation> scopeConstraint;
+  protected T module;
 
   protected ModuleAdapter(Class<T> moduleClass, String[] injectableTypes,
       Class<?>[] staticInjections, boolean overrides, Class<?>[] includes, boolean complete,
-      boolean library) {
-    this.moduleClass = moduleClass;
+      boolean library, Class<? extends Annotation> scopeConstraint) {
     this.injectableTypes = injectableTypes;
     this.staticInjections = staticInjections;
     this.overrides = overrides;
     this.includes = includes;
     this.complete = complete;
     this.library = library;
+    this.scopeConstraint = scopeConstraint;
+    this.moduleClass = moduleClass;
   }
 
   /**
@@ -73,5 +77,13 @@ public abstract class ModuleAdapter<T> {
   @Override
   public final int hashCode() {
     return moduleClass.hashCode();
+  }
+
+  /**
+   * An optional constraint on what scoping annotations may be used for objects created by
+   * this or included modules.
+   */
+  public Class<? extends Annotation> getScopeConstraint() {
+    return scopeConstraint;
   }
 }

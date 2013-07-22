@@ -16,11 +16,11 @@
 package dagger;
 
 import dagger.internal.TestingLoader;
+import java.util.Set;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Set;
 
 import static org.junit.Assert.fail;
 
@@ -62,6 +62,7 @@ public class UnusedProviderTest {
     }
   }
 
+  @Ignore("This is an invalid use of plus - need to figure out what case it should be testing.")
   @Test public void whenLibraryModulePlussedToNecessaryModule_shouldNotFailOnUnusedLibraryModule()
       throws Exception {
     class EntryPoint {

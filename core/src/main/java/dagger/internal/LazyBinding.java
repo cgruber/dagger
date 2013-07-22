@@ -30,7 +30,7 @@ final class LazyBinding<T> extends Binding<Lazy<T>> {
   private Binding<T> delegate;
 
   public LazyBinding(String key, Object requiredBy, ClassLoader loader, String lazyKey) {
-    super(key, null, false, requiredBy);
+    super(key, null, null, requiredBy);
     this.loader = loader;
     this.lazyKey = lazyKey;
   }

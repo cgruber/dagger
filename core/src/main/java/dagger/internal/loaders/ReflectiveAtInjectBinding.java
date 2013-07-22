@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.Scope;
 
 /**
  * Injects the {@code @Inject}-annotated fields and constructors of a class
@@ -53,10 +53,10 @@ public final class ReflectiveAtInjectBinding<T> extends Binding<T> {
    *     supports members injection only.
    * @param supertype the injectable supertype, or null if the supertype is a
    */
-  private ReflectiveAtInjectBinding(String provideKey, String membersKey, boolean singleton,
-      Class<?> type, Field[] fields, Constructor<T> constructor, int parameterCount,
-      Class<?> supertype, String[] keys) {
-    super(provideKey, membersKey, singleton, type);
+  private ReflectiveAtInjectBinding(String provideKey, String membersKey,
+      Class<? extends Annotation> scope, Class<?> type, Field[] fields, Constructor<T> constructor,
+      int parameterCount, Class<?> supertype, String[] keys) {
+    super(provideKey, membersKey, scope, type);
     this.constructor = constructor;
     this.fields = fields;
     this.supertype = supertype;
@@ -142,7 +142,7 @@ public final class ReflectiveAtInjectBinding<T> extends Binding<T> {
   }
 
   public static <T> Binding<T> create(Class<T> type, boolean mustHaveInjections) {
-    boolean singleton = type.isAnnotationPresent(Singleton.class);
+    Class<? extends Annotation> scope = getScopeForType(type);
     List<String> keys = new ArrayList<String>();
 
     // Lookup the injectable fields and their corresponding keys.
@@ -206,9 +206,9 @@ public final class ReflectiveAtInjectBinding<T> extends Binding<T> {
     } else {
       provideKey = null;
       parameterCount = 0;
-      if (singleton) {
+      if (scope != null) {
         throw new IllegalArgumentException(
-            "No injectable constructor on @Singleton " + type.getName());
+            "No injectable constructor on " + scope.getSimpleName() + " " + type.getName());
       }
     }
 
@@ -222,9 +222,28 @@ public final class ReflectiveAtInjectBinding<T> extends Binding<T> {
     }
 
     String membersKey = Keys.getMembersKey(type);
-    return new ReflectiveAtInjectBinding<T>(provideKey, membersKey, singleton, type,
+    return new ReflectiveAtInjectBinding<T>(provideKey, membersKey, scope, type,
         injectedFields.toArray(new Field[injectedFields.size()]), injectedConstructor,
         parameterCount, supertype, keys.toArray(new String[keys.size()]));
+  }
+
+  private static <T> Class<? extends Annotation> getScopeForType(Class<T> type) {
+    List<Class<? extends Annotation>> scopes = new ArrayList<Class<? extends Annotation>>(1);
+    for (Annotation a : type.getAnnotations()) {
+      Class<? extends Annotation> current = a.annotationType();
+      if (current.isAnnotationPresent(Scope.class)) {
+        scopes.add(current);
+      }
+    }
+    switch (scopes.size()) {
+      case 0:
+        return null;
+      case 1:
+        return scopes.get(0);
+      default:
+        throw new IllegalStateException(
+            "More than one scope annotation found on " + type.getName() + ": " + scopes);
+    }
   }
 
   @SuppressWarnings("unchecked") // Class.getDeclaredConstructors is an unsafe API.
