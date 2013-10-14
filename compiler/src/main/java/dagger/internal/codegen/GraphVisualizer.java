@@ -24,11 +24,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.inject.Inject;
 
 /**
  * Emits an object graph in dot format.
  */
 public final class GraphVisualizer {
+
+  @Inject GraphVisualizer() { }
+
   private static final Pattern KEY_PATTERN = Pattern.compile(""
       + "(?:@"            // Full annotation start.
       + "(?:[\\w$]+\\.)*" // Annotation package

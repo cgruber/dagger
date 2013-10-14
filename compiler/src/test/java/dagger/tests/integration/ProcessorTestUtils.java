@@ -16,11 +16,11 @@
  */
 package dagger.tests.integration;
 
+import com.google.common.collect.ImmutableList;
 import dagger.internal.codegen.GraphAnalysisProcessor;
 import dagger.internal.codegen.InjectAdapterProcessor;
 import dagger.internal.codegen.ModuleAdapterProcessor;
 import dagger.internal.codegen.ValidationProcessor;
-import java.util.Arrays;
 import javax.annotation.processing.Processor;
 
 /**
@@ -28,7 +28,7 @@ import javax.annotation.processing.Processor;
  */
 public class ProcessorTestUtils {
   public static Iterable<? extends Processor> daggerProcessors() {
-    return Arrays.asList(
+    return ImmutableList.of(
         new InjectAdapterProcessor(),
         new ModuleAdapterProcessor(),
         new GraphAnalysisProcessor(),

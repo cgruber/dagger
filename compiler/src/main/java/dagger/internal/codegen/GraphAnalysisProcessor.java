@@ -29,7 +29,6 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -37,17 +36,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.FilerException;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.inject.Singleton;
-import javax.lang.model.SourceVersion;
+import javax.inject.Inject;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.FileObject;
@@ -56,56 +53,58 @@ import javax.tools.StandardLocation;
 
 import static dagger.Provides.Type.SET;
 import static dagger.Provides.Type.SET_VALUES;
-import static dagger.internal.codegen.Util.getAnnotation;
-import static dagger.internal.codegen.Util.getPackage;
-import static dagger.internal.codegen.Util.isInterface;
-import static dagger.internal.codegen.Util.methodName;
 
 /**
  * Performs full graph analysis on a module.
  */
 @SupportedAnnotationTypes("dagger.Module")
-public final class GraphAnalysisProcessor extends AbstractProcessor {
+public final class GraphAnalysisProcessor extends AbstractDaggerProcessor {
   private final Set<String> delayedModuleNames = new LinkedHashSet<String>();
 
-  @Override public SourceVersion getSupportedSourceVersion() {
-    return SourceVersion.latestSupported();
+  @Inject Filer filer;
+  @Inject GraphAnalysisLoader loader;
+  @Inject GraphAnalysisErrorHandler errorHandlerFactory;
+  @Inject GraphVisualizer visualizer;
+
+  @Override protected Object getModule() {
+    @Module(injects = GraphAnalysisProcessor.class) class ProcessorModule { }
+    return new ProcessorModule();
   }
 
   /**
    * Perform full-graph analysis on complete modules. This checks that all of
    * the module's dependencies are satisfied.
    */
-  @Override public boolean process(Set<? extends TypeElement> types, RoundEnvironment env) {
+  @Override protected void doProcess(Set<? extends TypeElement> types, RoundEnvironment env) {
     if (!env.processingOver()) {
       // Storing module names for later retrieval as the element instance is invalidated across
       // passes.
       for (Element e : env.getElementsAnnotatedWith(Module.class)) {
         if (!(e instanceof TypeElement)) {
-          error("@Module applies to a type, " + e.getSimpleName() + " is a " + e.getKind(), e);
+          note.on(e)
+              .error("@Module applies to a type, %s is a %s", e.getSimpleName(), e.getKind());
           continue;
         }
         delayedModuleNames.add(((TypeElement) e).getQualifiedName().toString());
       }
-      return false;
     }
 
     Set<Element> modules = new LinkedHashSet<Element>();
     for (String moduleName : delayedModuleNames) {
-      modules.add(elements().getTypeElement(moduleName));
+      modules.add(elements.getTypeElement(moduleName));
     }
 
     for (Element element : modules) {
       Map<String, Object> annotation = null;
       try {
-        annotation = getAnnotation(Module.class, element);
+        annotation = Util.getAnnotation(Module.class, element);
       } catch (CodeGenerationIncompleteException e) {
         continue; // skip this element. An up-stream compiler error is in play.
       }
 
       TypeElement moduleType = (TypeElement) element;
       if (annotation == null) {
-        error("Missing @Module annotation.", moduleType);
+        note.on(moduleType).error("Missing @Module annotation.");
         continue;
       }
       if (annotation.get("complete").equals(Boolean.TRUE)) {
@@ -114,13 +113,13 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
           bindings = processCompleteModule(moduleType, false);
           new ProblemDetector().detectCircularDependencies(bindings.values());
         } catch (ModuleValidationException e) {
-          error("Graph validation failed: " + e.getMessage(), e.source);
+          note.on(e.source).error("Graph validation failed: %s", e);
           continue;
         } catch (InvalidBindingException e) {
-          error("Graph validation failed: " + e.getMessage(), elements().getTypeElement(e.type));
+          note.on(elements.getTypeElement(e.type)).error("Graph validation failed: %s", e);
           continue;
         } catch (RuntimeException e) {
-          error("Graph validation failed: " + e.getMessage(), moduleType);
+          note.on(moduleType).error("Graph validation failed: %s", e);
           continue;
         }
         try {
@@ -128,9 +127,8 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
         } catch (IOException e) {
           StringWriter sw = new StringWriter();
           e.printStackTrace(new PrintWriter(sw));
-          processingEnv.getMessager()
-              .printMessage(Diagnostic.Kind.WARNING,
-                  "Graph visualization failed. Please report this as a bug.\n\n" + sw, moduleType);
+          note.on(moduleType)
+              .warn("Graph visualization failed. Please report this as a bug.\n\n" + sw);
         }
       }
 
@@ -139,15 +137,10 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
         try {
           new ProblemDetector().detectUnusedBinding(bindings.values());
         } catch (IllegalStateException e) {
-          error("Graph validation failed: " + e.getMessage(), moduleType);
+          note.on(moduleType).error("Graph validation failed: %s", e);
         }
       }
     }
-    return false;
-  }
-
-  private void error(String message, Element element) {
-    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
   }
 
   private Map<String, Binding<?>> processCompleteModule(TypeElement rootModule,
@@ -157,9 +150,10 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     ArrayList<GraphAnalysisStaticInjection> staticInjections =
         new ArrayList<GraphAnalysisStaticInjection>();
 
-    Linker.ErrorHandler errorHandler = ignoreCompletenessErrors ? Linker.ErrorHandler.NULL
-        : new GraphAnalysisErrorHandler(processingEnv, rootModule.getQualifiedName().toString());
-    Linker linker = new Linker(null, new GraphAnalysisLoader(processingEnv), errorHandler);
+    Linker.ErrorHandler errorHandler = errorHandlerFactory.create(
+        ignoreCompletenessErrors, rootModule.getQualifiedName().toString());
+
+    Linker linker = new Linker(null, loader, errorHandler);
     // Linker requires synchronization for calls to requestBinding and linkAll.
     // We know statically that we're single threaded, but we synchronize anyway
     // to make the linker happy.
@@ -167,7 +161,7 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
       Map<String, Binding<?>> baseBindings = new LinkedHashMap<String, Binding<?>>();
       Map<String, Binding<?>> overrideBindings = new LinkedHashMap<String, Binding<?>>();
       for (TypeElement module : allModules.values()) {
-        Map<String, Object> annotation = getAnnotation(Module.class, module);
+        Map<String, Object> annotation = Util.getAnnotation(Module.class, module);
         boolean overrides = (Boolean) annotation.get("overrides");
         boolean library = (Boolean) annotation.get("library");
         Map<String, Binding<?>> addTo = overrides ? overrideBindings : baseBindings;
@@ -175,7 +169,7 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
         // Gather the injectable types from the annotation.
         for (Object injectableTypeObject : (Object[]) annotation.get("injects")) {
           TypeMirror injectableType = (TypeMirror) injectableTypeObject;
-          String key = isInterface(injectableType)
+          String key = Util.isInterface(injectableType)
               ? GeneratorKeys.get(injectableType)
               : GeneratorKeys.rawMembersKey(injectableType);
           linker.requestBinding(key, module.getQualifiedName().toString(),
@@ -197,20 +191,19 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
           }
           ExecutableElement providerMethod = (ExecutableElement) enclosed;
           String key = GeneratorKeys.get(providerMethod);
-          Binding binding = new ProviderMethodBinding(key, providerMethod, library);
+          Binding<?> binding = new GraphAnalysisProvidesBinding(key, providerMethod, library);
 
-          Binding previous = addTo.get(key);
+          Binding<?> previous = addTo.get(key);
           if (previous != null) {
             if ((provides.type() == SET || provides.type() == SET_VALUES)
                 && previous instanceof SetBinding) {
               // No duplicate bindings error if both bindings are set bindings.
             } else {
-              String message = "Duplicate bindings for " + key;
-              if (overrides) {
-                message += " in override module(s) - cannot override an override";
-              }
-              message += ":\n    " + previous.requiredBy + "\n    " + binding.requiredBy;
-              error(message, providerMethod);
+              note.on(providerMethod).error("Duplicate bindings for %s%s:\n    $s\n    %s",
+                  key,
+                  (overrides) ? "" : " in override module(s) - cannot override overrides",
+                  previous.requiredBy,
+                  binding.requiredBy);
             }
           }
 
@@ -246,18 +239,9 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     }
   }
 
-  private Elements elements() {
-    return processingEnv.getElementUtils();
-  }
-
-  private String shortMethodName(ExecutableElement method) {
-    return method.getEnclosingElement().getSimpleName().toString()
-        + "." + method.getSimpleName() + "()";
-  }
-
   void collectIncludesRecursively(
       TypeElement module, Map<String, TypeElement> result, Deque<String> path) {
-    Map<String, Object> annotation = getAnnotation(Module.class, module);
+    Map<String, Object> annotation = Util.getAnnotation(Module.class, module);
     if (annotation == null) {
       // TODO(tbroyer): pass annotation information
       throw new ModuleValidationException("No @Module on " + module, module);
@@ -303,49 +287,19 @@ public final class GraphAnalysisProcessor extends AbstractProcessor {
     }
   }
 
-  static class ProviderMethodBinding extends Binding<Object> {
-    private final ExecutableElement method;
-    private final Binding<?>[] parameters;
-
-    protected ProviderMethodBinding(String provideKey, ExecutableElement method, boolean library) {
-      super(provideKey, null, method.getAnnotation(Singleton.class) != null, methodName(method));
-      this.method = method;
-      this.parameters = new Binding[method.getParameters().size()];
-      setLibrary(library);
-    }
-
-    @Override public void attach(Linker linker) {
-      for (int i = 0; i < method.getParameters().size(); i++) {
-        VariableElement parameter = method.getParameters().get(i);
-        String parameterKey = GeneratorKeys.get(parameter);
-        parameters[i] = linker.requestBinding(parameterKey, method.toString(),
-            getClass().getClassLoader());
-      }
-    }
-
-    @Override public Object get() {
-      throw new AssertionError("Compile-time binding should never be called to inject.");
-    }
-
-    @Override public void injectMembers(Object t) {
-      throw new AssertionError("Compile-time binding should never be called to inject.");
-    }
-
-    @Override public void getDependencies(Set<Binding<?>> get, Set<Binding<?>> injectMembers) {
-      Collections.addAll(get, parameters);
-    }
-  }
-
   void writeDotFile(TypeElement module, Map<String, Binding<?>> bindings) throws IOException {
     JavaFileManager.Location location = StandardLocation.SOURCE_OUTPUT;
-    String path = getPackage(module).getQualifiedName().toString();
+    String path = Util.getPackage(module).getQualifiedName().toString();
     String file = module.getQualifiedName().toString().substring(path.length() + 1) + ".dot";
-    FileObject resource = processingEnv.getFiler().createResource(location, path, file, module);
-
-    Writer writer = resource.openWriter();
-    GraphVizWriter dotWriter = new GraphVizWriter(writer);
-    new GraphVisualizer().write(bindings, dotWriter);
-    dotWriter.close();
+    try {
+      FileObject resource = filer.createResource(location, path, file, module);
+      Writer writer = resource.openWriter();
+      GraphVizWriter dotWriter = new GraphVizWriter(writer);
+      visualizer.write(bindings, dotWriter);
+      dotWriter.close();
+    } catch (FilerException e) {
+      // We have already written this = subsequent rounds don't require a re-write.
+    }
   }
 
   static class ModuleValidationException extends IllegalStateException {

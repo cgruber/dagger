@@ -43,9 +43,8 @@ import javax.lang.model.util.SimpleTypeVisitor6;
 /**
  * Utilities for handling types in annotation processors
  */
-final class Util {
-  private Util() {
-  }
+public final class Util {
+  private Util() { }
 
   public static PackageElement getPackage(Element type) {
     while (type.getKind() != ElementKind.PACKAGE) {

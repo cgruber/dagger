@@ -20,6 +20,7 @@ import dagger.internal.Loader;
 import dagger.internal.ModuleAdapter;
 import dagger.internal.StaticInjection;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.inject.Inject;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 
@@ -31,11 +32,7 @@ import javax.lang.model.element.TypeElement;
  */
 public final class GraphAnalysisLoader extends Loader {
 
-  private final ProcessingEnvironment processingEnv;
-
-  public GraphAnalysisLoader(ProcessingEnvironment processingEnv) {
-    this.processingEnv = processingEnv;
-  }
+  @Inject ProcessingEnvironment processingEnv;
 
   @Override public Binding<?> getAtInjectBinding(
       String key, String className, ClassLoader classLoader, boolean mustHaveInjections) {
