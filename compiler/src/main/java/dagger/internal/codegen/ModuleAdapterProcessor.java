@@ -82,7 +82,7 @@ public final class ModuleAdapterProcessor extends AbstractDaggerProcessor {
           try {
             generator.generate(stringWriter, moduleType);
             JavaFileObject sourceFile = processingEnv.getFiler()
-                .createSourceFile(moduleType.adapterName, moduleType.type);
+                .createSourceFile(generator.adapterName(moduleType), moduleType.type);
             Writer sourceWriter = sourceFile.openWriter();
             sourceWriter.append(stringWriter.getBuffer());
             sourceWriter.close();

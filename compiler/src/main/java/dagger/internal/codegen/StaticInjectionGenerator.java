@@ -29,6 +29,7 @@ import javax.inject.Inject;
 import javax.lang.model.element.Element;
 
 import static dagger.internal.codegen.Util.getPackage;
+import static dagger.internal.loaders.GeneratedAdapters.STATIC_INJECTION_SUFFIX;
 import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PUBLIC;
 
@@ -38,6 +39,10 @@ import static javax.lang.model.element.Modifier.PUBLIC;
 final class StaticInjectionGenerator extends AbstractAdapterGenerator<InjectableType> {
 
   @Inject public StaticInjectionGenerator() { }
+
+  @Override String adapterName(InjectableType type) {
+    return Util.adapterName(type.type, STATIC_INJECTION_SUFFIX);
+  }
 
   /**
    * Write a companion class for {@code type} that extends {@link StaticInjection}.
@@ -56,7 +61,7 @@ final class StaticInjectionGenerator extends AbstractAdapterGenerator<Injectable
       writer.emitEmptyLine();
       writer.emitJavadoc(AdapterJavadocs.STATIC_INJECTION_TYPE,
           injectedClass.type.getSimpleName());
-      writer.beginType(injectedClass.adapterName, "class", EnumSet.of(PUBLIC, FINAL),
+      writer.beginType(adapterName(injectedClass), "class", EnumSet.of(PUBLIC, FINAL),
           StaticInjection.class.getSimpleName());
       writeMemberBindingsFields(writer, injectedClass.staticFields, false);
       writer.emitEmptyLine();

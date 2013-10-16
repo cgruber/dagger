@@ -25,12 +25,9 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 
-import static dagger.internal.codegen.Util.adapterName;
 import static dagger.internal.codegen.Util.elementToString;
 import static dagger.internal.codegen.Util.getNoArgsConstructor;
 import static dagger.internal.codegen.Util.isCallableConstructor;
-import static dagger.internal.loaders.GeneratedAdapters.INJECT_ADAPTER_SUFFIX;
-import static dagger.internal.loaders.GeneratedAdapters.STATIC_INJECTION_SUFFIX;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 import static javax.lang.model.element.Modifier.STATIC;
 
@@ -42,8 +39,6 @@ class InjectableType {
     final List<Element> staticFields;
     final ExecutableElement constructor;
     final List<Element> fields;
-    final String adapterName;
-    final String staticAdapterName;
 
     private InjectableType(TypeElement type, List<Element> staticFields,
         ExecutableElement constructor, List<Element> fields) {
@@ -51,8 +46,6 @@ class InjectableType {
       this.staticFields = staticFields;
       this.constructor = constructor;
       this.fields = fields;
-      this.adapterName = adapterName(type, INJECT_ADAPTER_SUFFIX);
-      this.staticAdapterName = adapterName(type, STATIC_INJECTION_SUFFIX);
     }
 
     static class Factory {

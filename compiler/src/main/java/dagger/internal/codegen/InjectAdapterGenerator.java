@@ -40,6 +40,7 @@ import static dagger.internal.codegen.AdapterJavadocs.bindingTypeDocs;
 import static dagger.internal.codegen.Util.getApplicationSupertype;
 import static dagger.internal.codegen.Util.getPackage;
 import static dagger.internal.codegen.Util.rawTypeToString;
+import static dagger.internal.loaders.GeneratedAdapters.INJECT_ADAPTER_SUFFIX;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PRIVATE;
@@ -51,6 +52,10 @@ import static javax.lang.model.element.Modifier.PUBLIC;
 class InjectAdapterGenerator extends AbstractAdapterGenerator<InjectableType> {
 
   @Inject public InjectAdapterGenerator() { }
+
+  @Override String adapterName(InjectableType type) {
+    return Util.adapterName(type.type, INJECT_ADAPTER_SUFFIX);
+  }
 
   /**
    * Write a companion class for {@code type} that extends {@link Binding}.
@@ -76,7 +81,7 @@ class InjectAdapterGenerator extends AbstractAdapterGenerator<InjectableType> {
       writer.emitImports(findImports(dependent, injectMembers, injectable.constructor != null));
       writer.emitEmptyLine();
       writer.emitJavadoc(bindingTypeDocs(strippedTypeName, isAbstract, injectMembers, dependent));
-      writer.beginType(injectable.adapterName, "class", EnumSet.of(PUBLIC, FINAL),
+      writer.beginType(adapterName(injectable), "class", EnumSet.of(PUBLIC, FINAL),
           JavaWriter.type(Binding.class, strippedTypeName),
           implementedInterfaces(strippedTypeName, injectMembers, injectable.constructor != null));
       writeMemberBindingsFields(writer, injectable.fields, disambiguateFields);
@@ -88,7 +93,7 @@ class InjectAdapterGenerator extends AbstractAdapterGenerator<InjectableType> {
       }
       writer.emitEmptyLine();
       writeInjectAdapterConstructor(writer, injectable.constructor, injectable.type,
-          strippedTypeName, injectable.adapterName);
+          strippedTypeName, adapterName(injectable));
       if (dependent) {
         writeAttachMethod(writer, injectable.constructor, injectable.fields,
             disambiguateFields, strippedTypeName, supertype, true);

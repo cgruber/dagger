@@ -87,7 +87,8 @@ public final class InjectAdapterProcessor extends AbstractDaggerProcessor {
       InjectableType injectable) throws IOException {
     StringWriter ioWriter = new StringWriter();
     generator.generate(ioWriter, injectable);
-    JavaFileObject sourceFile = filer.createSourceFile(injectable.adapterName, injectable.type);
+    JavaFileObject sourceFile =
+        filer.createSourceFile(generator.adapterName(injectable), injectable.type);
     Writer sourceWriter = sourceFile.openWriter();
     sourceWriter.append(ioWriter.getBuffer());
     sourceWriter.close();

@@ -43,6 +43,8 @@ abstract class AbstractAdapterGenerator<T> {
 
   abstract void generate(Writer out, T type) throws IOException;
 
+  abstract String adapterName(T type);
+
   protected String fieldName(boolean disambiguateFields, Element field) {
     return (disambiguateFields ? "field_" : "") + field.getSimpleName().toString();
   }

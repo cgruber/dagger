@@ -41,6 +41,7 @@ import javax.lang.model.type.TypeMirror;
 import static dagger.Provides.Type.SET;
 import static dagger.Provides.Type.SET_VALUES;
 import static dagger.internal.codegen.AdapterJavadocs.bindingTypeDocs;
+import static dagger.internal.loaders.GeneratedAdapters.MODULE_ADAPTER_SUFFIX;
 import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PRIVATE;
 import static javax.lang.model.element.Modifier.PUBLIC;
@@ -52,6 +53,10 @@ import static javax.lang.model.element.Modifier.STATIC;
 class ModuleAdapterGenerator extends AbstractAdapterGenerator<ModuleType> {
   private static final String BINDINGS_MAP = JavaWriter.type(
       Map.class, String.class.getCanonicalName(), Binding.class.getCanonicalName() + "<?>");
+
+  @Override String adapterName(ModuleType type) {
+    return Util.adapterName(type.type, MODULE_ADAPTER_SUFFIX);
+  }
 
   /**
    * Write a companion class for {@code type} that implements
@@ -72,7 +77,7 @@ class ModuleAdapterGenerator extends AbstractAdapterGenerator<ModuleType> {
     String typeName = module.type.getQualifiedName().toString();
     writer.emitEmptyLine();
     writer.emitJavadoc(AdapterJavadocs.MODULE_TYPE);
-    writer.beginType(module.adapterName, "class", EnumSet.of(PUBLIC, FINAL),
+    writer.beginType(adapterName(module), "class", EnumSet.of(PUBLIC, FINAL),
         JavaWriter.type(ModuleAdapter.class, typeName));
 
     StringBuilder injectsField = new StringBuilder().append("{ ");
@@ -111,7 +116,7 @@ class ModuleAdapterGenerator extends AbstractAdapterGenerator<ModuleType> {
         "Class<?>[]", "INCLUDES", EnumSet.of(PRIVATE, STATIC, FINAL), includesField.toString());
 
     writer.emitEmptyLine();
-    writer.beginMethod(null, module.adapterName, EnumSet.of(PUBLIC));
+    writer.beginMethod(null, adapterName(module), EnumSet.of(PUBLIC));
     writer.emitStatement("super(INJECTS, STATIC_INJECTIONS, %s %s, INCLUDES, %s %s, %s %s)",
         module.overrides, "/*overrides*/",
         module.complete, "/*complete*/",

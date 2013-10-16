@@ -25,13 +25,10 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 
-import static dagger.internal.loaders.GeneratedAdapters.MODULE_ADAPTER_SUFFIX;
-
 /**
  * Represents the key structural elements of an injectable type.
  */
 class ModuleType {
-    final String adapterName;
     final TypeElement type;
     final List<ExecutableElement> methods;
     final Object[] staticInjections;
@@ -41,8 +38,7 @@ class ModuleType {
     final boolean complete;
     final boolean library;
 
-    ModuleType(TypeElement type, Map<String, Object> annotation, List<ExecutableElement> methods,
-        String adapterName) {
+    ModuleType(TypeElement type, Map<String, Object> annotation, List<ExecutableElement> methods) {
       this.type = type;
       this.methods = methods;
       staticInjections = (Object[]) annotation.get("staticInjections");
@@ -51,7 +47,6 @@ class ModuleType {
       overrides = (Boolean) annotation.get("overrides");
       complete = (Boolean) annotation.get("complete");
       library = (Boolean) annotation.get("library");
-      this.adapterName = adapterName;
     }
 
     static class Factory {
@@ -70,8 +65,7 @@ class ModuleType {
           note.on(type).error("%s has @Provides methods but no @Module annotation", type);
           return null;
         }
-        String adapterName = Util.adapterName(type, MODULE_ADAPTER_SUFFIX);
-        return new ModuleType(type, annotationData, methods, adapterName);
+        return new ModuleType(type, annotationData, methods);
       }
     }
   }
