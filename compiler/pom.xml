@@ -21,7 +21,7 @@
   <parent>
     <groupId>com.google.dagger</groupId>
     <artifactId>dagger-parent</artifactId>
-    <version>1.1.1-SNAPSHOT</version>
+    <version>2.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>dagger-compiler</artifactId>
@@ -85,6 +85,7 @@
               <compilerArgument>-proc:none</compilerArgument>
             </configuration>
           </execution>
+          <!--
           <execution>
             <id>default-test-compile</id>
             <goals><goal>testCompile</goal></goals>
@@ -97,33 +98,7 @@
               </annotationProcessors>
             </configuration>
           </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-invoker-plugin</artifactId>
-        <configuration>
-          <addTestClassPath>true</addTestClassPath>
-          <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
-          <pomIncludes>
-            <pomInclude>*/pom.xml</pomInclude>
-          </pomIncludes>
-          <localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
-          <postBuildHookScript>verify</postBuildHookScript>
-          <filterProperties>
-            <dagger.version>${project.version}</dagger.version>
-            <dagger.groupId>${project.groupId}</dagger.groupId>
-          </filterProperties>
-        </configuration>
-        <executions>
-          <execution>
-            <id>integration-test</id>
-            <goals>
-              <goal>install</goal>
-              <goal>run</goal>
-            </goals>
-          </execution>
+          -->
         </executions>
       </plugin>
     </plugins>
