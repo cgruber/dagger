@@ -17,16 +17,23 @@
 package dagger;
 
 
-/**
- */
+@SuppressWarnings("unused")
 public final  class ObjectGraph {
   private ObjectGraph() { }
   public static <T> T create(Class<T> entryPointClass, Object... statefulModules) {
     return null;
   }
 
-  public static <T> T extend(Class<T> entryPointClass, Object graphRoot,
-      Object... moduleInstances) {
-    return null;
+  public static With extend(Object graphRoot) {
+    return new With() {
+      @Override public <T> T with(Class<T> entryPointClass, Object... moduleInstances) {
+        return null;
+      }
+    };
   }
+
+  public interface With {
+    <T> T with(Class<T> entryPointClass, Object... moduleInstances);
+  }
+
 }

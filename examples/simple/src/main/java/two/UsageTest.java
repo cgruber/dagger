@@ -31,20 +31,21 @@ import two.TestGraphs.TestSessionGraph;
 
 public final class UsageTest {
 
-  boolean test = true;
+  // f'rinstance
+  boolean testMode = true;
 
   void usage() {
     ApplicationGraph ag = ObjectGraph.create(ProductionApplicationGraph.class);
 
     HttpSession session = new HttpSession() { };
-    SessionGraph sg = test
-        ? ObjectGraph.extend(TestSessionGraph.class, ag) // no bindings needed for mocks.
-        : ObjectGraph.extend(ProductionSessionGraph.class, ag, new SessionBindings(session));
+    SessionGraph sg = testMode
+        ? ObjectGraph.extend(ag).with(TestSessionGraph.class) // no bindings needed for mocks.
+        : ObjectGraph.extend(ag).with(ProductionSessionGraph.class, new SessionBindings(session));
 
     HttpRequest request = new HttpRequest() { };
-    RequestGraph rg = ObjectGraph.extend(RequestGraph.class, sg, new RequestBindings(request));
-    HomeAction ha = rg.homeAction();
+    RequestGraph rg = ObjectGraph.extend(sg).with(RequestGraph.class, new RequestBindings(request));
 
+    HomeAction ha = rg.homeAction();
     ha.doStuff();
   }
 }
