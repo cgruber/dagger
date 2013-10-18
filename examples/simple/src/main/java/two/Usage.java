@@ -29,7 +29,7 @@ import two.ModelForRequest.RequestBindings;
 import two.ModelForSession.SessionBindings;
 import two.TestGraphs.TestSessionGraph;
 
-public final class UsageTest {
+public final class Usage {
 
   // f'rinstance
   boolean testMode = true;
