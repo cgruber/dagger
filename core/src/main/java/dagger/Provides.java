@@ -46,6 +46,9 @@ public @interface Provides {
      * method as parameters. The {@code Set<T>} produced from the accumulation of values will be
      * immutable.
      */
+    SET_VALUE,
+
+    @Deprecated
     SET,
 
     /**

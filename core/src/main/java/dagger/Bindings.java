@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2012 Square, Inc.
- * Copyright (C) 2012 Google, Inc.
+ * Copyright (C) 2013 Google, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +15,16 @@
  */
 package dagger;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
+ * Marks a class as being a collection of provides methods.
  */
-public final  class ObjectGraph {
-  private ObjectGraph() { }
-  public static <T> T create(Class<T> entryPointClass, Object... statefulModules) {
-    return null;
-  }
-
-  public static <T> T extend(Class<T> entryPointClass, Object graphRoot,
-      Object... moduleInstances) {
-    return null;
-  }
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+public @interface Bindings {
+  Class<?>[] includes() default { };
 }
