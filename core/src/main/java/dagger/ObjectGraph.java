@@ -16,6 +16,10 @@
  */
 package dagger;
 
+import dagger.internal.Creator;
+import java.lang.annotation.Annotation;
+import javax.inject.Provider;
+
 
 @SuppressWarnings("unused")
 public final  class ObjectGraph {
@@ -36,4 +40,19 @@ public final  class ObjectGraph {
     <T> T with(Class<T> entryPointClass, Object... moduleInstances);
   }
 
+
+  public static class Memoizer {
+    public <T> T getInstance(
+        Class<? extends Annotation> scope, String key, Provider<T> providerIfNotPresent) {
+      return null;
+    }
+
+    public <T> T  getBindings(Class<T> bindings) {
+      return null;
+    }
+
+    public <T> Creator<T> creatorFor(Class<T> class1) {
+      return null;
+    }
+  }
 }

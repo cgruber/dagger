@@ -6,15 +6,15 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import two.ModelForSession.User;
 
-final class ModelForApplication {
-  private ModelForApplication() { }
+final class ModelForApplication$UserFactory$$Creator {
+  private ModelForApplication$UserFactory$$Creator() { }
 
   // Types.
   interface Cache { }
 
   // Not scoped
   static class CacheImpl implements Cache {
-    @Inject CacheImpl() { }
+    CacheImpl() { }
   }
 
   @Singleton static class DataFetcher {
