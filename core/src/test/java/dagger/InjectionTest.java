@@ -16,28 +16,35 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static org.fest.assertions.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+@RunWith(JUnit4.class)
 public final class InjectionTest {
   @Test public void basicInjection() {
     class TestEntryPoint {
       @Inject Provider<G> gProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides E provideE(F f) {
         return new E(f);
@@ -48,7 +55,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     G g = entryPoint.gProvider.get();
     assertThat(g.a).isNotNull();
     assertThat(g.b).isNotNull();
@@ -102,12 +109,12 @@ public final class InjectionTest {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
 
     assertThat(entryPoint.aProvider.get()).isNotNull();
     assertThat(entryPoint.aProvider.get()).isNotNull();
@@ -121,7 +128,7 @@ public final class InjectionTest {
       @Inject Provider<I> iProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton F provideF() {
         return new F();
@@ -129,7 +136,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.fProvider.get()).isSameAs(entryPoint.fProvider.get());
     assertThat(entryPoint.iProvider.get()).isSameAs(entryPoint.iProvider.get());
   }
@@ -149,7 +156,7 @@ public final class InjectionTest {
       @Inject @Named("two") A aTwo;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Named("one") A getOne() {
         return one;
@@ -160,7 +167,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.a).isNotNull();
     assertThat(one).isSameAs(entryPoint.aOne);
     assertThat(two).isSameAs(entryPoint.aTwo);
@@ -171,7 +178,7 @@ public final class InjectionTest {
       @Inject Provider<L> lProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       A a1;
       A a2;
@@ -185,7 +192,7 @@ public final class InjectionTest {
 
     TestEntryPoint entryPoint = new TestEntryPoint();
     TestModule module = new TestModule();
-    ObjectGraph.create(module).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), module).inject(entryPoint);
     entryPoint.lProvider.get();
 
     assertThat(module.a1).isNotNull();
@@ -208,7 +215,7 @@ public final class InjectionTest {
       @Inject F f2;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton F provideF() {
         return new F();
@@ -216,7 +223,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
 
     assertThat(entryPoint.f1).isSameAs(entryPoint.f2);
     assertThat(entryPoint.f1).isSameAs(entryPoint.n1.f1);
@@ -238,11 +245,11 @@ public final class InjectionTest {
       @Inject @Named("a") A a;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -255,7 +262,7 @@ public final class InjectionTest {
       @Inject Q q;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides F provideF() {
         return new F();
@@ -263,7 +270,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.q.f).isNotNull();
   }
 
@@ -272,12 +279,12 @@ public final class InjectionTest {
       @Inject T t;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.t).isNotNull();
   }
 
@@ -301,7 +308,7 @@ public final class InjectionTest {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       boolean sInjected = false;
 
@@ -318,7 +325,7 @@ public final class InjectionTest {
     R.injected = false;
     TestEntryPoint entryPoint = new TestEntryPoint();
     TestModule module = new TestModule();
-    ObjectGraph.create(module).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), module).inject(entryPoint);
 
     assertThat(R.injected).isFalse();
     assertThat(module.sInjected).isFalse();
@@ -330,6 +337,50 @@ public final class InjectionTest {
     @Inject R() {
       injected = true;
     }
+  }
+
+  @Test public void providesSet() {
+    final Set<A> set = Collections.emptySet();
+
+    class TestEntryPoint {
+      @Inject Set<A> set;
+    }
+
+    @Module(injects = TestEntryPoint.class)
+    class TestModule {
+      @Provides Set<A> provideSet() {
+        return set;
+      }
+    }
+
+    TestEntryPoint entryPoint = new TestEntryPoint();
+    TestModule module = new TestModule();
+    ObjectGraph.createWith(new TestingLoader(), module).inject(entryPoint);
+
+    assertThat(entryPoint.set).isSameAs(set);
+  }
+
+  @Test public void providesSetValues() {
+    final Set<A> set = Collections.emptySet();
+
+    class TestEntryPoint {
+      @Inject Set<A> set;
+    }
+
+    @Module(injects = TestEntryPoint.class)
+    class TestModule {
+      @Provides(type = Provides.Type.SET_VALUES) Set<A> provideSet() {
+        return set;
+      }
+    }
+
+    TestEntryPoint entryPoint = new TestEntryPoint();
+    TestModule module = new TestModule();
+    ObjectGraph.createWith(new TestingLoader(), module).inject(entryPoint);
+
+    // copies into immutable collection
+    assertThat(entryPoint.set).isNotSameAs(set);
+    assertThat(entryPoint.set).isEqualTo(set);
   }
 
   @Test public void providerMethodsConflict() {
@@ -344,10 +395,75 @@ public final class InjectionTest {
     }
 
     try {
-      ObjectGraph.create(new TestModule());
+      ObjectGraph.createWith(new TestingLoader(), new TestModule());
       fail();
     } catch (IllegalArgumentException expected) {
     }
+  }
+
+  @Test public void providesSetConflictsWithProvidesTypeSet() {
+    @Module
+    class TestModule {
+      @Provides(type = Provides.Type.SET) A provideSetElement() {
+        throw new AssertionError();
+      }
+      @Provides Set<A> provideSet() {
+        throw new AssertionError();
+      }
+    }
+
+    try {
+      ObjectGraph.createWith(new TestingLoader(), new TestModule());
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+
+  @Test public void providesSetConflictsWithProvidesTypeSetValues() {
+    @Module
+    class TestModule {
+      @Provides(type = Provides.Type.SET_VALUES) Set<A> provideSetContribution() {
+        throw new AssertionError();
+      }
+      @Provides Set<A> provideSet() {
+        throw new AssertionError();
+      }
+    }
+
+    try {
+      ObjectGraph.createWith(new TestingLoader(), new TestModule());
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+
+  @Test public void providesSetOfProvidersIsDifferentThanProvidesTypeSetValues() {
+    final Set<A> set = Collections.emptySet();
+    final Set<Provider<A>> providers = Collections.emptySet();
+
+    class TestEntryPoint {
+      @Inject Set<A> set;
+      @Inject Set<Provider<A>> providers;
+    }
+
+    @Module(injects = TestEntryPoint.class)
+    class TestModule {
+      @Provides(type = Provides.Type.SET_VALUES) Set<A> provideSetContribution() {
+        return set;
+      }
+      @Provides Set<Provider<A>> provideProviders() {
+        return providers;
+      }
+    }
+
+    TestEntryPoint entryPoint = new TestEntryPoint();
+    TestModule module = new TestModule();
+    ObjectGraph.createWith(new TestingLoader(), module).inject(entryPoint);
+
+    // copies into immutable collection
+    assertThat(entryPoint.set).isNotSameAs(set);
+    assertThat(entryPoint.set).isEqualTo(set);
+    assertThat(entryPoint.providers).isSameAs(providers);
   }
 
   @Test public void singletonsInjectedOnlyIntoProviders() {
@@ -355,7 +471,7 @@ public final class InjectionTest {
       @Inject Provider<A> aProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides @Singleton A provideA() {
         return new A();
@@ -363,7 +479,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.aProvider.get()).isSameAs(entryPoint.aProvider.get());
   }
 
@@ -372,7 +488,7 @@ public final class InjectionTest {
       @Inject Provider<E> eProvider;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class BaseModule {
       @Provides F provideF() {
         throw new AssertionError();
@@ -390,7 +506,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new BaseModule(), new OverridesModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new BaseModule(), new OverridesModule()).inject(entryPoint);
     E e = entryPoint.eProvider.get();
     assertThat(e).isNotNull();
     assertThat(e.f).isNotNull();
@@ -401,11 +517,11 @@ public final class InjectionTest {
       @Inject RandomAccess randomAccess;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -413,16 +529,34 @@ public final class InjectionTest {
     }
   }
 
-  @Test public void noProvideBindingsForAbstractClasses() {
-    class TestEntryPoint {
-      @Inject AbstractList<?> abstractList;
+  @Test public void objectGraphGetInterface() {
+    final Runnable runnable = new Runnable() {
+      @Override public void run() {
+      }
+    };
+
+    @Module(injects = Runnable.class)
+    class TestModule {
+      @Provides Runnable provideRunnable() {
+        return runnable;
+      }
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
+    graph.validate();
+    assertThat(graph.get(Runnable.class)).isSameAs(runnable);
+  }
+
+  @Test public void noProvideBindingsForAbstractClasses() {
+    class TestEntryPoint {
+      @Inject AbstractList abstractList;
+    }
+
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -449,7 +583,7 @@ public final class InjectionTest {
       @Inject ExtendsParameterizedType extendsParameterizedType;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
@@ -457,7 +591,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.extendsParameterizedType.string).isEqualTo("injected");
   }
 
@@ -466,7 +600,7 @@ public final class InjectionTest {
       @Inject List<String> listOfStrings;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides List<String> provideList() {
         return Arrays.asList("a", "b");
@@ -474,7 +608,7 @@ public final class InjectionTest {
     }
 
     TestEntryPoint entryPoint = new TestEntryPoint();
-    ObjectGraph.create(new TestModule()).inject(entryPoint);
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(entryPoint);
     assertThat(entryPoint.listOfStrings).isEqualTo(Arrays.asList("a", "b"));
   }
 
@@ -483,7 +617,7 @@ public final class InjectionTest {
       @Inject List<? extends Number> listOfNumbers;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides List<? extends Number> provideList() {
         return Arrays.asList(1, 2);
@@ -491,29 +625,30 @@ public final class InjectionTest {
     }
 
     try {
-      ObjectGraph.create(new TestModule());
+      ObjectGraph.createWith(new TestingLoader(), new TestModule());
       fail();
     } catch (UnsupportedOperationException expected) {
     }
   }
 
-  @Test public void noConstructorInjectionsForClassesWithTypeParameters() {
-    class Parameterized<T> {
+  static class Parameterized<T> {
       @Inject String string;
     }
+
+  @Test public void noConstructorInjectionsForClassesWithTypeParameters() {
 
     class TestEntryPoint {
       @Inject Parameterized<Long> parameterized;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -526,22 +661,22 @@ public final class InjectionTest {
     class TestModule {
     }
 
-    ObjectGraph.create(new TestModule());
+    ObjectGraph.createWith(new TestingLoader(), new TestModule());
   }
 
   @Test public void getInstance() {
     final AtomicInteger next = new AtomicInteger(0);
 
-    @Module(entryPoints = Integer.class)
+    @Module(injects = Integer.class)
     class TestModule {
       @Provides Integer provideInteger() {
         return next.getAndIncrement();
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
-    assertEquals(0, (int) graph.get(Integer.class));
-    assertEquals(1, (int) graph.get(Integer.class));
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
+    assertThat((int) graph.get(Integer.class)).isEqualTo(0);
+    assertThat((int) graph.get(Integer.class)).isEqualTo(1);
   }
 
   @Test public void getInstanceRequiresEntryPoint() {
@@ -552,7 +687,7 @@ public final class InjectionTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.get(Integer.class);
       fail();
@@ -561,26 +696,26 @@ public final class InjectionTest {
   }
 
   @Test public void getInstanceOfPrimitive() {
-    @Module(entryPoints = int.class)
+    @Module(injects = int.class)
     class TestModule {
       @Provides int provideInt() {
         return 1;
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertEquals(1, (int) graph.get(int.class));
   }
 
   @Test public void getInstanceOfArray() {
-    @Module(entryPoints = int[].class)
+    @Module(injects = int[].class)
     class TestModule {
       @Provides int[] provideIntArray() {
         return new int[] { 1, 2, 3 };
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertEquals("[1, 2, 3]", Arrays.toString(graph.get(int[].class)));
   }
 
@@ -589,7 +724,7 @@ public final class InjectionTest {
       @Inject String s;
     }
 
-    @Module(entryPoints = BoundTwoWays.class)
+    @Module(injects = BoundTwoWays.class)
     class TestModule {
       @Provides
       BoundTwoWays provideBoundTwoWays() {
@@ -603,7 +738,7 @@ public final class InjectionTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     BoundTwoWays provided = graph.get(BoundTwoWays.class);
     assertEquals("Pepsi", provided.s);
 
@@ -618,11 +753,11 @@ public final class InjectionTest {
   }
 
   @Test public void entryPointNeedsNoInjectAnnotation() {
-    @Module(entryPoints = NoInjections.class)
+    @Module(injects = NoInjections.class)
     class TestModule {
     }
 
-    ObjectGraph.create(new TestModule()).validate();
+    ObjectGraph.createWith(new TestingLoader(), new TestModule()).validate();
   }
 
   static class InjectMembersOnly {
@@ -632,14 +767,14 @@ public final class InjectionTest {
   }
 
   @Test public void cannotGetOnMembersOnlyInjectionPoint() {
-    @Module(entryPoints = InjectMembersOnly.class)
+    @Module(injects = InjectMembersOnly.class)
     class TestModule {
       @Provides String provideString() {
         return "injected";
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.get(InjectMembersOnly.class);
       fail();
@@ -659,7 +794,7 @@ public final class InjectionTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -675,14 +810,14 @@ public final class InjectionTest {
   }
 
   @Test public void twoAtInjectConstructorsIsRejected() {
-    @Module(entryPoints = TwoAtInjectConstructors.class)
+    @Module(injects = TwoAtInjectConstructors.class)
     class TestModule {
       @Provides String provideString() {
         throw new AssertionError();
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -695,7 +830,7 @@ public final class InjectionTest {
       @Inject String string;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString() {
         throw new ClassCastException("foo");
@@ -703,7 +838,7 @@ public final class InjectionTest {
     }
 
     try {
-      ObjectGraph.create(new TestModule()).inject(new TestEntryPoint());
+      ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(new TestEntryPoint());
       fail();
     } catch (ClassCastException e) {
       assertThat(e.getMessage()).isEqualTo("foo");
@@ -717,15 +852,86 @@ public final class InjectionTest {
   }
 
   @Test public void runtimeConstructorExceptionsAreNotWrapped() {
-    @Module(entryPoints = ThrowsOnConstruction.class)
+    @Module(injects = ThrowsOnConstruction.class)
     class TestModule {
     }
 
     try {
-      ObjectGraph.create(new TestModule()).get(ThrowsOnConstruction.class);
+      ObjectGraph.createWith(new TestingLoader(), new TestModule()).get(ThrowsOnConstruction.class);
       fail();
     } catch (ClassCastException e) {
       assertThat(e.getMessage()).isEqualTo("foo");
+    }
+  }
+
+  static class SingletonLinkedFromExtension {
+    @Inject C c; // Singleton.
+  }
+
+  @Module(complete = false, injects = C.class)
+  static class RootModule { }
+
+  @Module(addsTo = RootModule.class, injects = SingletonLinkedFromExtension.class)
+  static class ExtensionModule { }
+
+  @Test public void testSingletonLinkingThroughExtensionGraph() {
+    ObjectGraph root = ObjectGraph.createWith(new TestingLoader(), new RootModule());
+    // DO NOT CALL root.get(C.class)) HERE to get forced-linking behaviour from plus();
+    ObjectGraph extension = root.plus(new ExtensionModule());
+    assertThat(extension.get(SingletonLinkedFromExtension.class).c).isSameAs(root.get(C.class));
+  }
+
+  @Test public void privateFieldsFail() {
+    class Test {
+      @Inject private Object nope;
+    }
+
+    @Module(injects = Test.class)
+    class TestModule {
+      @Provides Object provideObject() {
+        return null;
+      }
+    }
+
+    try {
+      ObjectGraph.createWith(new TestingLoader(), new TestModule()).inject(new Test());
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Can't inject private field: ");
+    }
+  }
+
+  @Test public void privateConstructorsFail() {
+    class Test {
+      @Inject private Test() {
+      }
+    }
+
+    @Module(injects = Test.class)
+    class TestModule {
+    }
+
+    try {
+      ObjectGraph.createWith(new TestingLoader(), new TestModule()).get(Test.class);
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Can't inject private constructor: ");
+    }
+  }
+
+  /** https://github.com/square/dagger/issues/231 */
+  @Test public void atInjectAlwaysRequiredForConstruction() {
+    @Module(injects = ArrayList.class)
+    class TestModule {
+    }
+
+    ObjectGraph objectGraph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
+    objectGraph.validate();
+    try {
+      objectGraph.get(ArrayList.class);
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Unable to create binding for java.util.ArrayList");
     }
   }
 }

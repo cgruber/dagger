@@ -16,10 +16,13 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -27,6 +30,7 @@ import static org.junit.Assert.assertNull;
 /**
  * Tests of injection of Lazy<T> bindings.
  */
+@RunWith(JUnit4.class)
 public final class InjectionOfLazyTest {
   @Test public void lazyValueCreation() {
     final AtomicInteger counter = new AtomicInteger();
@@ -35,7 +39,7 @@ public final class InjectionOfLazyTest {
       @Inject Lazy<Integer> j;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides Integer provideInteger() {
         return counter.incrementAndGet();
@@ -56,7 +60,7 @@ public final class InjectionOfLazyTest {
     class TestEntryPoint {
       @Inject Lazy<String> i;
     }
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideInteger() {
         provideCounter.incrementAndGet();
@@ -78,7 +82,7 @@ public final class InjectionOfLazyTest {
       @Inject Provider<Lazy<Integer>> providerOfLazyInteger;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides Integer provideInteger() {
         return counter.incrementAndGet();
@@ -104,7 +108,7 @@ public final class InjectionOfLazyTest {
       @Inject Lazy<Integer> lazyInteger;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides Integer provideInteger() {
         return counter.incrementAndGet();
@@ -124,6 +128,6 @@ public final class InjectionOfLazyTest {
   }
 
   private <T> T injectWithModule(T ep, Object ... modules) {
-    return ObjectGraph.create(modules).inject(ep);
+    return ObjectGraph.createWith(new TestingLoader(), modules).inject(ep);
   }
 }

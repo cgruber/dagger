@@ -15,22 +15,26 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import javax.inject.Inject;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static org.junit.Assert.fail;
 
+@RunWith(JUnit4.class)
 public final class ProblemDetectorTest {
   @Test public void atInjectCircularDependenciesDetected() {
     class TestEntryPoint {
       @Inject Rock rock;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -49,7 +53,7 @@ public final class ProblemDetectorTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     try {
       graph.validate();
       fail();
@@ -58,7 +62,7 @@ public final class ProblemDetectorTest {
   }
 
   @Test public void validateLazy() {
-    @Module
+    @Module(library = true)
     class TestModule {
       @Provides Integer dependOnLazy(Lazy<String> lazyString) {
         throw new AssertionError();
@@ -68,7 +72,7 @@ public final class ProblemDetectorTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     graph.validate();
   }
 

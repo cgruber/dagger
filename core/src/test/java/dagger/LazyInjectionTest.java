@@ -15,18 +15,22 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import javax.inject.Inject;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static org.fest.assertions.Assertions.assertThat;
 
+@RunWith(JUnit4.class)
 public final class LazyInjectionTest {
-  @Test public void getLazyDoesNotCauseEntryPointsToBeLoaded() {
-    @Module(entryPoints = LazyEntryPoint.class)
+  @Test public void getLazyDoesNotCauseInjectedTypesToBeLoaded() {
+    @Module(injects = LazyEntryPoint.class)
     class TestModule {
     }
 
-    ObjectGraph.create(new TestModule());
+    ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(lazyEntryPointLoaded).isFalse();
   }
 
@@ -45,7 +49,7 @@ public final class LazyInjectionTest {
       }
     }
 
-    ObjectGraph.create(new TestModule());
+    ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(lazyProvidesParameterLoaded).isFalse();
   }
 
@@ -64,7 +68,7 @@ public final class LazyInjectionTest {
       }
     }
 
-    ObjectGraph.create(new TestModule());
+    ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(lazyProvidesResultLoaded).isFalse();
   }
 
@@ -80,7 +84,7 @@ public final class LazyInjectionTest {
     class TestModule {
     }
 
-    ObjectGraph.create(new TestModule());
+    ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(LazyInjectStaticsLoaded).isFalse();
   }
 
@@ -96,7 +100,7 @@ public final class LazyInjectionTest {
       @Inject String injected;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides String provideString(Integer integer) {
         return integer.toString();
@@ -106,7 +110,7 @@ public final class LazyInjectionTest {
       }
     }
 
-    ObjectGraph objectGraph = ObjectGraph.create(new TestModule());
+    ObjectGraph objectGraph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     TestEntryPoint entryPoint = new TestEntryPoint();
     objectGraph.inject(entryPoint);
     assertThat(entryPoint.injected).isEqualTo("5");

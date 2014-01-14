@@ -17,43 +17,61 @@
 package dagger.internal;
 
 
-import java.util.Map;
-
 /**
  * Extracts bindings from an {@code @Module}-annotated class.
  */
 public abstract class ModuleAdapter<T> {
-  public final String[] entryPoints;
+  public final Class<T> moduleClass;
+  public final String[] injectableTypes;
   public final Class<?>[] staticInjections;
   public final boolean overrides;
   public final Class<?>[] includes;
   public final boolean complete;
-  protected T module;
+  public final boolean library;
 
-  protected ModuleAdapter(String[] entryPoints, Class<?>[] staticInjections, boolean overrides,
-      Class<?>[] includes, boolean complete) {
-    this.entryPoints = entryPoints;
+  protected ModuleAdapter(Class<T> moduleClass, String[] injectableTypes,
+      Class<?>[] staticInjections, boolean overrides, Class<?>[] includes, boolean complete,
+      boolean library) {
+    this.moduleClass = moduleClass;
+    this.injectableTypes = injectableTypes;
     this.staticInjections = staticInjections;
     this.overrides = overrides;
     this.includes = includes;
     this.complete = complete;
+    this.library = library;
   }
 
   /**
    * Returns bindings for the {@code @Provides} methods of {@code module}. The
    * returned bindings must be linked before they can be used to inject values.
    */
-  public abstract void getBindings(Map<String, Binding<?>> map);
+  @SuppressWarnings("unused")
+  public void getBindings(BindingsGroup map, T module) {
+    // no-op;
+  }
 
   /**
    * Returns a new instance of the module class created using a no-args
    * constructor. Only used when a manually-constructed module is not supplied.
    */
-  protected abstract T newModule();
-
-  public T getModule() {
-    return module;
+  protected T newModule() {
+    throw new UnsupportedOperationException("No no-args constructor on " + getClass().getName());
   }
 
+  @Override
+  public final boolean equals(Object obj) {
+    if (obj == this) {
+      return true;
+    } else if (obj instanceof ModuleAdapter<?>) {
+      ModuleAdapter<?> that = (ModuleAdapter<?>) obj;
+      return this.moduleClass.equals(that.moduleClass);
+    } else {
+      return false;
+    }
+  }
 
+  @Override
+  public final int hashCode() {
+    return moduleClass.hashCode();
+  }
 }

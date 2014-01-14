@@ -15,22 +15,24 @@
  */
 package dagger.internal;
 
-import java.util.Set;
 
 /**
  * Injects a Provider or a MembersInjector.
  */
 final class BuiltInBinding<T> extends Binding<T> {
   private final String delegateKey;
+  private final ClassLoader classLoader;
   private Binding<?> delegate;
 
-  public BuiltInBinding(String key, Object requiredBy, String delegateKey) {
+  public BuiltInBinding(
+      String key, Object requiredBy, ClassLoader classLoader, String delegateKey) {
     super(key, null, false, requiredBy);
+    this.classLoader = classLoader;
     this.delegateKey = delegateKey;
   }
 
   @Override public void attach(Linker linker) {
-    delegate = linker.requestBinding(delegateKey, requiredBy);
+    delegate = linker.requestBinding(delegateKey, requiredBy, classLoader);
   }
 
   @Override public void injectMembers(T t) {
@@ -46,7 +48,6 @@ final class BuiltInBinding<T> extends Binding<T> {
     return delegate;
   }
 
-  @Override public void getDependencies(Set<Binding<?>> get, Set<Binding<?>> injectMembers) {
-    // We don't add 'delegate' because it isn't actually used by get() or injectMembers().
-  }
+  // public void getDependencies() not overridden.
+  // We don't add 'delegate' because it isn't actually used by get() or injectMembers().
 }

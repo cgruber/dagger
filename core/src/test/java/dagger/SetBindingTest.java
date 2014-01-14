@@ -16,6 +16,7 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Arrays;
@@ -27,20 +28,26 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static dagger.Provides.Type.SET;
+import static dagger.Provides.Type.SET_VALUES;
+import static java.util.Collections.emptySet;
 import static org.fest.assertions.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
+@RunWith(JUnit4.class)
 public final class SetBindingTest {
   @Test public void multiValueBindings_SingleModule() {
     class TestEntryPoint {
       @Inject Set<String> strings;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides(type=SET) String provideFirstString() { return "string1"; }
       @Provides(type=SET) String provideSecondString() { return "string2"; }
@@ -60,14 +67,42 @@ public final class SetBindingTest {
       @Provides(type=SET) String provideSecondString() { return "string2"; }
     }
 
-    @Module(entryPoints = TestEntryPoint.class, includes = TestIncludesModule.class)
+    @Module(injects = TestEntryPoint.class, includes = TestIncludesModule.class)
     class TestModule {
       @Provides(type=SET) String provideFirstString() { return "string1"; }
+
+      @Provides(type=SET_VALUES) Set<String> provideDefaultStrings() {
+        return emptySet();
+      }
     }
 
     TestEntryPoint ep = injectWithModule(new TestEntryPoint(),
         new TestModule(), new TestIncludesModule());
     assertEquals(set("string1", "string2"), ep.strings);
+  }
+
+  @Test public void multiValueBindings_MultiModule_NestedSet() {
+    class TestEntryPoint {
+      @Inject Set<Set<String>> stringses;
+    }
+
+    @Module
+    class TestIncludesModule {
+      @Provides(type=SET) Set<String> provideSecondStrings() { return set("string2"); }
+    }
+
+    @Module(injects = TestEntryPoint.class, includes = TestIncludesModule.class)
+    class TestModule {
+      @Provides(type=SET) Set<String> provideFirstStrings() { return set("string1"); }
+
+      @Provides(type=SET_VALUES) Set<Set<String>> provideDefaultStringeses() {
+        return set(set("string3"));
+      }
+    }
+
+    TestEntryPoint ep = injectWithModule(new TestEntryPoint(),
+        new TestModule(), new TestIncludesModule());
+    assertEquals(set(set("string1"),set("string2"), set("string3")), ep.stringses);
   }
 
   @Test public void multiValueBindings_WithSingletonAndDefaultValues() {
@@ -78,7 +113,7 @@ public final class SetBindingTest {
       @Inject Set<Integer> objects2;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides(type=SET) @Singleton Integer a() { return singletonCounter.getAndIncrement(); }
       @Provides(type=SET) Integer b() { return defaultCounter.getAndIncrement(); }
@@ -89,7 +124,7 @@ public final class SetBindingTest {
     assertEquals(set(100, 201), ep.objects2);
   }
 
-  @Test public void multiValueBindings_WithSingletonsAcrossMultipleEntryPoints() {
+  @Test public void multiValueBindings_WithSingletonsAcrossMultipleInjectableTypes() {
     final AtomicInteger singletonCounter = new AtomicInteger(100);
     final AtomicInteger defaultCounter = new AtomicInteger(200);
     class TestEntryPoint1 {
@@ -99,13 +134,13 @@ public final class SetBindingTest {
       @Inject Set<Integer> objects2;
     }
 
-    @Module(entryPoints = { TestEntryPoint1.class, TestEntryPoint2.class })
+    @Module(injects = { TestEntryPoint1.class, TestEntryPoint2.class })
     class TestModule {
       @Provides(type=SET) @Singleton Integer a() { return singletonCounter.getAndIncrement(); }
       @Provides(type=SET) Integer b() { return defaultCounter.getAndIncrement(); }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     TestEntryPoint1 ep1 = graph.inject(new TestEntryPoint1());
     TestEntryPoint2 ep2 = graph.inject(new TestEntryPoint2());
     assertEquals(set(100, 200), ep1.objects1);
@@ -119,12 +154,16 @@ public final class SetBindingTest {
       @Inject @Named("foo") Set<String> fooStrings;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
-      @Provides(type=SET) String provideString1() { return "string1"; }
+      @Provides(type=SET_VALUES) Set<String> provideString1() {
+        return set("string1");
+      }
       @Provides(type=SET) String provideString2() { return "string2"; }
       @Provides(type=SET) @Named("foo") String provideString3() { return "string3"; }
-      @Provides(type=SET) @Named("foo") String provideString4() { return "string4"; }
+      @Provides(type=SET_VALUES) @Named("foo") Set<String> provideString4() {
+        return set("string4");
+      }
     }
 
     TestEntryPoint ep = injectWithModule(new TestEntryPoint(), new TestModule());
@@ -155,7 +194,7 @@ public final class SetBindingTest {
         };
       }
     }
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides(type=SET) LogSink nullLogger() {
         return new LogSink() { @Override public void log(LogMessage message) {} };
@@ -170,19 +209,100 @@ public final class SetBindingTest {
     assertThat(logoutput.get()).contains("NullPointerException");
   }
 
+  @Test public void duplicateValuesContributed() {
+    class TestEntryPoint {
+      @Inject Set<String> strings;
+    }
+
+    @Module(injects = TestEntryPoint.class)
+    class TestModule {
+      @Provides(type=SET) String provideString1() { return "a"; }
+      @Provides(type=SET) String provideString2() { return "a"; }
+      @Provides(type=SET) String provideString3() { return "b"; }
+    }
+
+    TestEntryPoint ep = injectWithModule(new TestEntryPoint(), new TestModule());
+    assertThat(ep.strings).containsOnly("a", "b");
+  }
+
   @Test public void validateSetBinding() {
     class TestEntryPoint {
       @Inject Set<String> strings;
     }
 
-    @Module(entryPoints = TestEntryPoint.class)
+    @Module(injects = TestEntryPoint.class)
     class TestModule {
       @Provides(type=SET) String provideString1() { return "string1"; }
       @Provides(type=SET) String provideString2() { return "string2"; }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     graph.validate();
+  }
+
+  @Test public void validateEmptySetBinding() {
+    class TestEntryPoint {
+      @Inject Set<String> strings;
+    }
+
+    @Module(injects = TestEntryPoint.class)
+    class TestModule {
+      @Provides(type=SET_VALUES) Set<String> provideDefault() {
+        return emptySet();
+      }
+    }
+
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
+    graph.validate();
+  }
+
+  @Test public void validateLibraryModules() {
+    class TestEntryPoint {}
+
+    @Module(library = true)
+    class SetModule {
+      @Provides(type = SET)
+      public String provideString() {
+        return "";
+      }
+    }
+
+    @Module(injects = TestEntryPoint.class, includes = SetModule.class)
+    class TestModule {}
+
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(),
+        new TestModule(), new SetModule());
+    graph.validate();
+  }
+
+  @Test public void validateLibraryModules_nonLibraryContributors() {
+    class TestEntryPoint {}
+
+    @Module(library = true)
+    class SetModule1 {
+      @Provides(type = SET)
+      public String provideString() {
+        return "a";
+      }
+    }
+
+    @Module
+    class SetModule2 {
+      @Provides(type = SET)
+      public String provideString() {
+        return "b";
+      }
+    }
+
+    @Module(injects = TestEntryPoint.class, includes = { SetModule1.class, SetModule2.class })
+    class TestModule {}
+
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(),
+        new TestModule(), new SetModule1(), new SetModule2());
+    try {
+      graph.validate();
+      fail();
+    } catch (IllegalStateException expected) {}
   }
 
   static class Logger {
@@ -209,7 +329,7 @@ public final class SetBindingTest {
   }
 
   private <T> T injectWithModule(T ep, Object ... modules) {
-    return ObjectGraph.create(modules).inject(ep);
+    return ObjectGraph.createWith(new TestingLoader(), modules).inject(ep);
   }
 
   private <T> Set<T> set(T... ts) {

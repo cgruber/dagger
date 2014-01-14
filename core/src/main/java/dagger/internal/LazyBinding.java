@@ -17,7 +17,6 @@
 package dagger.internal;
 
 import dagger.Lazy;
-import java.util.Set;
 
 /**
  * Injects a Lazy wrapper for a type T
@@ -27,38 +26,45 @@ final class LazyBinding<T> extends Binding<Lazy<T>> {
   private final static Object NOT_PRESENT = new Object();
 
   private final String lazyKey;
+  private final ClassLoader loader;
   private Binding<T> delegate;
 
-  public LazyBinding(String key, Object requiredBy, String lazyKey) {
+  public LazyBinding(String key, Object requiredBy, ClassLoader loader, String lazyKey) {
     super(key, null, false, requiredBy);
+    this.loader = loader;
     this.lazyKey = lazyKey;
   }
 
   @SuppressWarnings("unchecked") // At runtime we know it's a Binding<Lazy<T>>.
   @Override
   public void attach(Linker linker) {
-    delegate = (Binding<T>) linker.requestBinding(lazyKey, requiredBy);
+    delegate = (Binding<T>) linker.requestBinding(lazyKey, requiredBy, loader);
   }
 
   @Override public void injectMembers(Lazy<T> t) {
-    throw new UnsupportedOperationException(); // not a member injection binding.
+    throw new UnsupportedOperationException(); // Injecting into a custom Lazy not supported.
   }
 
   @Override
   public Lazy<T> get() {
     return new Lazy<T>() {
-      private Object cacheValue = NOT_PRESENT;
+      private volatile Object cacheValue = NOT_PRESENT;
 
       @SuppressWarnings("unchecked") // Delegate is of type T
       @Override
       public T get() {
-        return (T) ((cacheValue != NOT_PRESENT) ? cacheValue : (cacheValue = delegate.get()));
+        if (cacheValue == NOT_PRESENT) {
+          synchronized (this) {
+            if (cacheValue == NOT_PRESENT) {
+              cacheValue = delegate.get();
+            }
+          }
+        }
+        return (T) cacheValue;
       }
     };
   }
 
-  @Override public void getDependencies(
-      Set<Binding<?>> getBindings, Set<Binding<?>> injectMembersBindings) {
-    // We don't add 'delegate' because it isn't actually used by get() or injectMembers().
-  }
+  // public void getDependencies() not overridden.
+  // We don't add 'delegate' because it isn't actually used by get() or injectMembers().
 }

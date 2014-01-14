@@ -25,10 +25,13 @@ import java.util.Map;
 import javax.inject.Named;
 import javax.inject.Provider;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static dagger.Provides.Type.SET;
 import static org.fest.assertions.Assertions.assertThat;
 
+@RunWith(JUnit4.class)
 public final class KeysTest {
   int primitive;
   @Test public void lonePrimitiveGetsBoxed() throws NoSuchFieldException {
@@ -129,7 +132,7 @@ public final class KeysTest {
 
   @Test public void testGetElementKey_NoQualifier() throws NoSuchMethodException {
     Method method = KeysTest.class.getDeclaredMethod("elementProvides", new Class<?>[]{});
-    assertThat(Keys.getElementKey(method.getGenericReturnType(), method.getAnnotations(), method))
+    assertThat(Keys.getSetKey(method.getGenericReturnType(), method.getAnnotations(), method))
         .isEqualTo("java.util.Set<java.lang.String>");
   }
 
@@ -138,7 +141,7 @@ public final class KeysTest {
 
   @Test public void testGetElementKey_WithQualifier() throws NoSuchMethodException {
     Method method = KeysTest.class.getDeclaredMethod("qualifiedElementProvides", new Class<?>[]{});
-    assertThat(Keys.getElementKey(method.getGenericReturnType(), method.getAnnotations(), method))
+    assertThat(Keys.getSetKey(method.getGenericReturnType(), method.getAnnotations(), method))
         .isEqualTo("@javax.inject.Named(value=foo)/java.util.Set<java.lang.String>");
   }
 

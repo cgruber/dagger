@@ -15,12 +15,16 @@
  */
 package dagger;
 
+import dagger.internal.TestingLoader;
 import javax.inject.Inject;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import static org.fest.assertions.Assertions.assertThat;
 
+@RunWith(JUnit4.class)
 public final class InjectStaticsTest {
   @Before public void setUp() {
     InjectsOneField.staticField = null;
@@ -44,7 +48,7 @@ public final class InjectStaticsTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(),new TestModule());
     assertThat(InjectsOneField.staticField).isNull();
     graph.injectStatics();
     assertThat(InjectsOneField.staticField).isEqualTo("static");
@@ -53,7 +57,7 @@ public final class InjectStaticsTest {
   @Test public void instanceFieldsNotInjectedByInjectStatics() {
     @Module(
         staticInjections = InjectsStaticAndNonStatic.class,
-        entryPoints = InjectsStaticAndNonStatic.class)
+        injects = InjectsStaticAndNonStatic.class)
     class TestModule {
       @Provides String provideString() {
         return "static";
@@ -63,7 +67,7 @@ public final class InjectStaticsTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(InjectsStaticAndNonStatic.staticField).isNull();
     graph.injectStatics();
     assertThat(InjectsStaticAndNonStatic.staticField).isEqualTo("static");
@@ -72,7 +76,7 @@ public final class InjectStaticsTest {
   @Test public void staticFieldsNotInjectedByInjectMembers() {
     @Module(
         staticInjections = InjectsStaticAndNonStatic.class,
-        entryPoints = InjectsStaticAndNonStatic.class)
+        injects = InjectsStaticAndNonStatic.class)
     class TestModule {
       @Provides String provideString() {
         throw new AssertionError();
@@ -82,7 +86,7 @@ public final class InjectStaticsTest {
       }
     }
 
-    ObjectGraph graph = ObjectGraph.create(new TestModule());
+    ObjectGraph graph = ObjectGraph.createWith(new TestingLoader(), new TestModule());
     assertThat(InjectsStaticAndNonStatic.staticField).isNull();
     InjectsStaticAndNonStatic object = new InjectsStaticAndNonStatic();
     graph.inject(object);

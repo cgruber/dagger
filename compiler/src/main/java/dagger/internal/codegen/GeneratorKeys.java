@@ -25,12 +25,15 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 
+import static dagger.internal.codegen.Util.rawTypeToString;
+import static dagger.internal.codegen.Util.typeToString;
+
 /**
  * Creates keys using javac's mirror APIs. Unlike {@code Keys}, this class uses
  * APIs not available on Android.
  */
 final class GeneratorKeys {
-  private static final String SET_PREFIX = Set.class.getName() + "<";
+  private static final String SET_PREFIX = Set.class.getCanonicalName() + "<";
 
   private GeneratorKeys() {
   }
@@ -41,36 +44,36 @@ final class GeneratorKeys {
    * generated code.
    */
   public static String rawMembersKey(TypeMirror type) {
-    return "members/" + CodeGen.rawTypeToString(type, '$');
+    return "members/" + rawTypeToString(type, '$');
   }
 
   /** Returns the provider key for {@code type}. */
   public static String get(TypeMirror type) {
     StringBuilder result = new StringBuilder();
-    CodeGen.typeToString(type, result, '$');
+    typeToString(type, result, '$');
     return result.toString();
   }
 
   /** Returns the provided key for {@code method}. */
   public static String get(ExecutableElement method) {
     StringBuilder result = new StringBuilder();
-    AnnotationMirror qualifier = getQualifier(method.getAnnotationMirrors(), method);
+    AnnotationMirror qualifier = getQualifier(method.getAnnotationMirrors());
     if (qualifier != null) {
       qualifierToString(qualifier, result);
     }
-    CodeGen.typeToString(method.getReturnType(), result, '$');
+    typeToString(method.getReturnType(), result, '$');
     return result.toString();
   }
 
   /** Returns the provided key for {@code method} wrapped by {@code Set}. */
-  public static String getElementKey(ExecutableElement method) {
+  public static String getSetKey(ExecutableElement method) {
     StringBuilder result = new StringBuilder();
-    AnnotationMirror qualifier = getQualifier(method.getAnnotationMirrors(), method);
+    AnnotationMirror qualifier = getQualifier(method.getAnnotationMirrors());
     if (qualifier != null) {
       qualifierToString(qualifier, result);
     }
     result.append(SET_PREFIX);
-    CodeGen.typeToString(method.getReturnType(), result, '$');
+    typeToString(method.getReturnType(), result, '$');
     result.append(">");
     return result.toString();
   }
@@ -78,18 +81,18 @@ final class GeneratorKeys {
   /** Returns the provider key for {@code variable}. */
   public static String get(VariableElement variable) {
     StringBuilder result = new StringBuilder();
-    AnnotationMirror qualifier = getQualifier(variable.getAnnotationMirrors(), variable);
+    AnnotationMirror qualifier = getQualifier(variable.getAnnotationMirrors());
     if (qualifier != null) {
       qualifierToString(qualifier, result);
     }
-    CodeGen.typeToString(variable.asType(), result, '$');
+    typeToString(variable.asType(), result, '$');
     return result.toString();
   }
 
   private static void qualifierToString(AnnotationMirror qualifier, StringBuilder result) {
     // TODO: guarantee that element values are sorted by name (if there are multiple)
     result.append('@');
-    CodeGen.typeToString(qualifier.getAnnotationType(), result, '$');
+    typeToString(qualifier.getAnnotationType(), result, '$');
     result.append('(');
     for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry
         : qualifier.getElementValues().entrySet()) {
@@ -100,15 +103,13 @@ final class GeneratorKeys {
     result.append(")/");
   }
 
+  /** Does not test for multiple qualifiers. This is tested in {@code ValidationProcessor}.  */
   private static AnnotationMirror getQualifier(
-      List<? extends AnnotationMirror> annotations, Object member) {
+      List<? extends AnnotationMirror> annotations) {
     AnnotationMirror qualifier = null;
     for (AnnotationMirror annotation : annotations) {
       if (annotation.getAnnotationType().asElement().getAnnotation(Qualifier.class) == null) {
         continue;
-      }
-      if (qualifier != null) {
-        throw new IllegalArgumentException("Too many qualifier annotations on " + member);
       }
       qualifier = annotation;
     }

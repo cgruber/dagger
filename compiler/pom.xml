@@ -19,9 +19,9 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.squareup</groupId>
+    <groupId>com.squareup.dagger</groupId>
     <artifactId>dagger-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -37,6 +37,14 @@
       <artifactId>dagger</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.squareup</groupId>
+      <artifactId>javawriter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>junit</groupId>
@@ -48,6 +56,23 @@
       <artifactId>fest-assert</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>dagger</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+      <classifier>tests</classifier>
+    </dependency>
+    <dependency>
+      <groupId>com.google.testing.compile</groupId>
+      <artifactId>compile-testing</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.truth0</groupId>
+      <artifactId>truth</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -55,9 +80,27 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <compilerArgument>-proc:none</compilerArgument>
-        </configuration>
+        <executions>
+          <execution>
+            <id>default-compile</id>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <compilerArgument>-proc:none</compilerArgument>
+            </configuration>
+          </execution>
+          <execution>
+            <id>default-test-compile</id>
+            <goals><goal>testCompile</goal></goals>
+            <configuration>
+              <annotationProcessors>
+                <annotationProcessor>dagger.internal.codegen.ValidationProcessor</annotationProcessor>
+                <annotationProcessor>dagger.internal.codegen.InjectAdapterProcessor</annotationProcessor>
+                <annotationProcessor>dagger.internal.codegen.ModuleAdapterProcessor</annotationProcessor>
+                <annotationProcessor>dagger.internal.codegen.GraphAnalysisProcessor</annotationProcessor>
+              </annotationProcessors>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
 
       <plugin>
@@ -73,6 +116,7 @@
           <postBuildHookScript>verify</postBuildHookScript>
           <filterProperties>
             <dagger.version>${project.version}</dagger.version>
+            <dagger.groupId>${project.groupId}</dagger.groupId>
           </filterProperties>
         </configuration>
         <executions>
@@ -81,6 +125,24 @@
             <goals>
               <goal>install</goal>
               <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
             </goals>
           </execution>
         </executions>
