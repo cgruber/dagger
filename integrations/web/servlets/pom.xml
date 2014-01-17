@@ -21,7 +21,7 @@
   <parent>
     <groupId>com.squareup.dagger.integrations</groupId>
     <artifactId>dagger-integrations-web-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>dagger-web-servlets</artifactId>
@@ -32,17 +32,48 @@
     application - namely Application, Session, and Request.
   </description>
 
+  <properties>
+    <jetty.version>8.1.11.v20130520</jetty.version>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>com.squareup</groupId>
       <artifactId>dagger</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.squareup</groupId>
+      <artifactId>dagger-compiler</artifactId>
+      <version>${project.version}</version>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>15.0</version>
     </dependency>
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
       <version>3.0.1</version>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <version>${jetty.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlet</artifactId>
+      <version>${jetty.version}</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>
