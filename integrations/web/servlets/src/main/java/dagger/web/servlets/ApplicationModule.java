@@ -16,18 +16,18 @@
  */
 package dagger.web.servlets;
 
-import dagger.ObjectGraph;
-import javax.servlet.ServletRequest;
+import dagger.Module;
+import dagger.Provides;
+import javax.inject.Singleton;
+import javax.servlet.ServletContext;
 
-public class WebObjectGraph {
-
-  public static ObjectGraph get(ServletRequest servletRequest) {
-    ObjectGraph graph = (ObjectGraph)servletRequest.getAttribute("dagger.web.request.objectgraph");
-    if (graph == null) {
-      throw new IllegalStateException("No ObjectGraph found. "
-          + "Did you remember to register DaggerServletFilter?");
-    }
-    return graph;
+@Module(/* scope = Singleton.class, */library = true)
+public final class ApplicationModule {
+  private final ServletContext context;
+  ApplicationModule(ServletContext context) {
+    this.context = context;
   }
-
+  @Provides @Singleton ServletContext servletContext() {
+    return context;
+  }
 }

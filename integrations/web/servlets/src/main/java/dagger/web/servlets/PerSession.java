@@ -16,18 +16,7 @@
  */
 package dagger.web.servlets;
 
-import dagger.ObjectGraph;
-import javax.servlet.ServletRequest;
+import javax.inject.Scope;
 
-public class WebObjectGraph {
-
-  public static ObjectGraph get(ServletRequest servletRequest) {
-    ObjectGraph graph = (ObjectGraph)servletRequest.getAttribute("dagger.web.request.objectgraph");
-    if (graph == null) {
-      throw new IllegalStateException("No ObjectGraph found. "
-          + "Did you remember to register DaggerServletFilter?");
-    }
-    return graph;
-  }
-
-}
+@Scope
+public @interface PerSession { }
