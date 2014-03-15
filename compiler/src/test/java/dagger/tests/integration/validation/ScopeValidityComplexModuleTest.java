@@ -38,10 +38,49 @@ public class ScopeValidityComplexModuleTest {
   private static final Joiner EOL = Joiner.on("\n");
   private static final String IMPORTS = "import dagger.Module;";
 
-  private static final JavaFileObject SHORT_SCOPE =
-      source("PerSession", "import javax.inject.Scope;", "@Scope public @interface PerSession {}");
   private static final JavaFileObject INTERMEDIATE_SCOPE =
+      source("PerSession", "import javax.inject.Scope;", "@Scope public @interface PerSession {}");
+  private static final JavaFileObject SHORT_SCOPE =
       source("PerRequest", "import javax.inject.Scope;", "@Scope public @interface PerRequest {}");
+
+  @Test public void nonRootModuleContainsNoRoot_Fail() {
+    JavaFileObject a = source("A", IMPORTS,
+        "@Module(scope = PerRequest.class)", "class A {}");
+    ASSERT.about(javaSources()).that(asList(SHORT_SCOPE, a))
+      .processedWith(daggerProcessors())
+      .failsToCompile()
+      .withErrorContaining("Non-root scoped module claims to be complete"
+      		+ " but does not reference a longer-lived scope.");
+  }
+
+  @Test public void singletonModuleAddsToSingletonModule_Fail() {
+    JavaFileObject a = source("A", IMPORTS, "@Module", "class A {}");
+    JavaFileObject b = source("B", IMPORTS, "@Module(addsTo = A.class)", "class B {}");
+    ASSERT.about(javaSources()).that(asList(SHORT_SCOPE, a, b))
+      .processedWith(daggerProcessors())
+      .compilesWithoutError();
+//      .failsToCompile()
+ //     .withErrorContaining("Cannot use addsTo references with the same scope.");
+  }
+
+  @Test public void customScopedModuleAddsToCustomScopedModule_Fail() {
+    JavaFileObject a = source("A", IMPORTS, "@Module(scope = PerRequest.class)", "class A {}");
+    JavaFileObject b = source("B", IMPORTS,
+        "@Module(scope = PerRequest.class, addsTo = A.class)", "class B {}");
+    ASSERT.about(javaSources()).that(asList(SHORT_SCOPE, a, b))
+      .processedWith(daggerProcessors())
+      .failsToCompile()
+      .withErrorContaining("Cannot use addsTo references with the same scope.");
+  }
+
+  @Test public void singletonModuleAddsTo_Fail() {
+    JavaFileObject a = source("A", IMPORTS, "@Module(scope = PerRequest.class)", "class A {}");
+    JavaFileObject b = source("B", IMPORTS, "@Module(addsTo = A.class)", "class B {}");
+    ASSERT.about(javaSources()).that(asList(SHORT_SCOPE, a, b))
+      .processedWith(daggerProcessors())
+      .failsToCompile()
+      .withErrorContaining("foo");
+  }
 
   @Test public void modulesIncludeScopeCycle_Fail() {
     JavaFileObject a = source("A", IMPORTS,
