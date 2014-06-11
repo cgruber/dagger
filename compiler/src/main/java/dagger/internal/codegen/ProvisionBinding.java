@@ -15,6 +15,22 @@
  */
 package dagger.internal.codegen;
 
+import com.google.auto.common.MoreElements;
+import com.google.auto.value.AutoValue;
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+import dagger.Component;
+import dagger.Provides;
+import java.util.Iterator;
+import javax.inject.Inject;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
+
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Sets.immutableEnumSet;
@@ -24,25 +40,6 @@ import static dagger.internal.codegen.InjectionAnnotations.getScopeAnnotation;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 import static javax.lang.model.element.ElementKind.FIELD;
 import static javax.lang.model.element.ElementKind.METHOD;
-
-import com.google.auto.common.MoreElements;
-import com.google.auto.value.AutoValue;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
-
-import dagger.Component;
-import dagger.Provides;
-
-import java.util.Iterator;
-
-import javax.inject.Inject;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
 
 /**
  * A value object representing the mechanism by which a {@link Key} can be provided. New instances
@@ -164,7 +161,7 @@ abstract class ProvisionBinding extends Binding {
           ImmutableList.<DependencyRequest>of(),
           Kind.COMPONENT,
           Provides.Type.UNIQUE,
-          Key.create(componentDefinitionType.asType()),
+          keyFactory.forType(componentDefinitionType.asType()),
           Optional.<AnnotationMirror>absent(),
           false);
     }

@@ -16,49 +16,57 @@
  */
 package dagger.tests.integration.operation;
 
-import dagger.Module;
-import dagger.ObjectGraph;
-import dagger.Provides;
-import javax.inject.Inject;
+import com.google.testing.compile.JavaFileObjects;
+import dagger.internal.codegen.ComponentProcessor;
+import javax.tools.JavaFileObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import static org.fest.assertions.Assertions.assertThat;
+import static com.google.testing.compile.JavaSourcesSubjectFactory.javaSources;
+import static java.util.Arrays.asList;
+import static org.truth0.Truth.ASSERT;
 
 @RunWith(JUnit4.class)
 public final class PrimitiveInjectionTest {
-  static class ArrayInjectable {
-    @Inject byte[] byteArray;
-    @Inject int[] integerArray;
-    @Inject boolean[] booleanArray;
-    @Inject char[] charArray;
-    @Inject long[] longArray;
-    @Inject float[] floatArray;
-    @Inject double[] doubleArray;
-  }
 
-  @Module(injects = ArrayInjectable.class)
-  static class PrimitiveArrayModule {
-    @Provides byte[] byteArray() { return new byte[] { Byte.MAX_VALUE }; }
-    @Provides int[] intArray() { return new int[] { Integer.MAX_VALUE }; }
-    @Provides boolean[] booleanArray() { return new boolean[] { true }; }
-    @Provides long[] longArray() { return new long[] { Long.MAX_VALUE }; }
-    @Provides char[] charArray() { return new char[] { Character.MAX_VALUE }; }
-    @Provides float[] floatArray() { return new float[] { Float.MAX_VALUE }; }
-    @Provides double[] doubleArray() { return new double[] { Double.MAX_VALUE }; }
-  }
+  JavaFileObject annotation = JavaFileObjects.forSourceLines("test.ForTest",
+      "package test;",
+      "import javax.inject.Qualifier;",
+      "@Qualifier",
+      "public @interface ForTest {",
+      "}");
+
+  JavaFileObject primitiveInjectable = JavaFileObjects.forSourceLines("test.PrimitiveInjectable",
+      "package test;",
+      "import javax.inject.Inject;",
+      "class PrimitiveInjectable {",
+      "  @Inject PrimitiveInjectable(@ForTest int ignored) {}",
+      "}");
+
+  JavaFileObject primitiveModule = JavaFileObjects.forSourceLines("test.PrimitiveModule",
+      "package test;",
+      "import dagger.Module;",
+      "import dagger.Provides;",
+      "@Module",
+      "class PrimitiveModule {",
+      "  @Provides @ForTest int primitiveInt() { return Integer.MAX_VALUE; }",
+      "}");
+
+  JavaFileObject component = JavaFileObjects.forSourceLines("test.PrimitiveComponent",
+      "package test;",
+      "import dagger.Component;",
+      "import dagger.Provides;",
+      "@Component(modules = PrimitiveModule.class)",
+      "interface PrimitiveComponent {",
+      "  PrimitiveInjectable primitiveInjectable();",
+      "  @ForTest int primitiveInt();",
+      "}");
 
   @Test public void primitiveArrayTypesAllInjected() {
-    ArrayInjectable result = ObjectGraph.create(PrimitiveArrayModule.class)
-        .get(ArrayInjectable.class);
-    assertThat(result).isNotNull();
-    assertThat(result.byteArray).isEqualTo(new byte[] { Byte.MAX_VALUE });
-    assertThat(result.integerArray).isEqualTo(new int[] { Integer.MAX_VALUE });
-    assertThat(result.booleanArray).isEqualTo(new boolean[] { true });
-    assertThat(result.charArray).isEqualTo(new char[] { Character.MAX_VALUE });
-    assertThat(result.longArray).isEqualTo(new long[] { Long.MAX_VALUE });
-    assertThat(result.floatArray).isEqualTo(new float[] { Float.MAX_VALUE });
-    assertThat(result.doubleArray).isEqualTo(new double[] { Double.MAX_VALUE });
+    ASSERT.about(javaSources())
+        .that(asList(annotation, component, primitiveInjectable, primitiveModule))
+        .processedWith(new ComponentProcessor())
+        .compilesWithoutError();
   }
 }

@@ -15,22 +15,16 @@
  */
 package dagger.internal.codegen;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-
 import dagger.Lazy;
 import dagger.MembersInjector;
 import dagger.Provides;
-
 import java.util.List;
-
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.lang.model.element.AnnotationMirror;
@@ -41,6 +35,9 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 
 /**
@@ -71,10 +68,12 @@ abstract class DependencyRequest {
   static final class Factory {
     private final Elements elements;
     private final Types types;
+    private final Key.Factory keyFactory;
 
-    Factory(Elements elements, Types types) {
+    Factory(Elements elements, Types types, Key.Factory keyFactory) {
       this.elements = elements;
       this.types = types;
+      this.keyFactory = keyFactory;
     }
 
     ImmutableList<DependencyRequest> forRequiredVariables(
@@ -108,36 +107,47 @@ abstract class DependencyRequest {
           InjectionAnnotations.getQualifier(membersInjectionMethod);
       checkArgument(!qualifier.isPresent());
       return new AutoValue_DependencyRequest(Kind.MEMBERS_INJECTOR,
-          Key.create(qualifier,
-              Iterables.getOnlyElement(membersInjectionMethod.getParameters()).asType()),
+          qualifiedTypeForParameter(qualifier, membersInjectionMethod),
           membersInjectionMethod);
     }
 
     private DependencyRequest newDependencyRequest(Element requestElement, TypeMirror type,
         Optional<AnnotationMirror> qualifier) {
-      if (elements.getTypeElement(Provider.class.getCanonicalName())
-          .equals(types.asElement(type))) {
-        DeclaredType providerType = (DeclaredType) type;
+      if (isTypeOf(Provider.class.getCanonicalName(), type)) {
         return new AutoValue_DependencyRequest(Kind.PROVIDER,
-            Key.create(qualifier, Iterables.getOnlyElement(providerType.getTypeArguments())),
+            qualifiedTypeForParameter(qualifier, (DeclaredType) type),
             requestElement);
-      } else if (elements.getTypeElement(Lazy.class.getCanonicalName())
-          .equals(types.asElement(type))) {
-        DeclaredType lazyType = (DeclaredType) type;
+      } else if (isTypeOf(Lazy.class.getCanonicalName(), type)) {
         return new AutoValue_DependencyRequest(Kind.LAZY,
-            Key.create(qualifier, Iterables.getOnlyElement(lazyType.getTypeArguments())),
+            qualifiedTypeForParameter(qualifier, (DeclaredType) type),
             requestElement);
-      } else if (elements.getTypeElement(MembersInjector.class.getCanonicalName())
-          .equals(types.asElement(type))) {
+      } else if (isTypeOf(MembersInjector.class.getCanonicalName(), type)) {
         checkArgument(!qualifier.isPresent());
-        DeclaredType membersInjectorType = (DeclaredType) type;
         return new AutoValue_DependencyRequest(Kind.MEMBERS_INJECTOR,
-            Key.create(qualifier, Iterables.getOnlyElement(membersInjectorType.getTypeArguments())),
+            qualifiedTypeForParameter(qualifier, (DeclaredType) type),
             requestElement);
       } else {
-        return new AutoValue_DependencyRequest(Kind.INSTANCE, Key.create(qualifier, type),
+        return new AutoValue_DependencyRequest(Kind.INSTANCE,
+            keyFactory.forQualifiedType(qualifier, type),
             requestElement);
       }
+    }
+
+    private Key qualifiedTypeForParameter(
+        Optional<AnnotationMirror> qualifier, ExecutableElement providerType) {
+      return keyFactory.forQualifiedType(qualifier,
+          Iterables.getOnlyElement(providerType.getParameters()).asType());
+    }
+
+    private Key qualifiedTypeForParameter(
+        Optional<AnnotationMirror> qualifier, DeclaredType providerType) {
+      return keyFactory.forQualifiedType(qualifier,
+          Iterables.getOnlyElement(providerType.getTypeArguments()));
+    }
+
+    private boolean isTypeOf(String typeName, TypeMirror type) {
+      return elements.getTypeElement(typeName)
+          .equals(types.asElement(type));
     }
   }
 }

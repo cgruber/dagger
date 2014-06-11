@@ -16,17 +16,12 @@
  */
 package dagger.internal.codegen;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import dagger.internal.Keys;
-
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.AnnotationValueVisitor;
@@ -45,6 +40,9 @@ import javax.lang.model.type.TypeVariable;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.SimpleAnnotationValueVisitor6;
 import javax.lang.model.util.SimpleTypeVisitor6;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Utilities for handling types in annotation processors
@@ -156,6 +154,7 @@ final class Util {
         result.append(errorType.toString());
         return null;
       }
+      @Override
       public Void visitWildcard(WildcardType wildcardType, Void v) {
         result.append("?");
         if (wildcardType.getExtendsBound() != null) {
@@ -283,7 +282,7 @@ final class Util {
     }
   }
 
-  private static Class<?> box(PrimitiveType primitiveType) {
+  static Class<?> box(PrimitiveType primitiveType) {
     switch (primitiveType.getKind()) {
       case BYTE:
         return Byte.class;

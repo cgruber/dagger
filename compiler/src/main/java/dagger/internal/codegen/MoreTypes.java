@@ -15,22 +15,15 @@
  */
 package dagger.internal.codegen;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static javax.lang.model.type.TypeKind.ARRAY;
-import static javax.lang.model.type.TypeKind.DECLARED;
-import static javax.lang.model.type.TypeKind.EXECUTABLE;
-import static javax.lang.model.type.TypeKind.TYPEVAR;
-import static javax.lang.model.type.TypeKind.WILDCARD;
-
 import com.google.auto.common.MoreElements;
 import com.google.common.base.Equivalence;
+import com.google.common.base.Objects;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSet.Builder;
-
 import java.util.Iterator;
 import java.util.List;
-
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
@@ -44,6 +37,14 @@ import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.SimpleElementVisitor6;
 import javax.lang.model.util.SimpleTypeVisitor6;
 import javax.lang.model.util.Types;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static javax.lang.model.type.TypeKind.ARRAY;
+import static javax.lang.model.type.TypeKind.DECLARED;
+import static javax.lang.model.type.TypeKind.EXECUTABLE;
+import static javax.lang.model.type.TypeKind.TYPEVAR;
+import static javax.lang.model.type.TypeKind.WILDCARD;
 
 /**
  * Utilities related to {@link TypeMirror} instances.
@@ -64,8 +65,39 @@ final class MoreTypes {
     }
   };
 
-  static Equivalence<TypeMirror> equivalence() {
+  static Equivalence<TypeMirror> typeEquivalence() {
     return TYPE_EQUIVALENCE;
+  }
+
+  private static final Equivalence<Optional<AnnotationMirror>> ANNOTATION_MIRROR_EQUIVALENCE =
+      new Equivalence<Optional<AnnotationMirror>>() {
+        @Override
+        protected boolean doEquivalent(Optional<AnnotationMirror> a, Optional<AnnotationMirror> b) {
+          if (!a.isPresent()) {
+            return !b.isPresent();
+          } else {
+            if (!b.isPresent()) {
+              return false;
+            } else {
+              AnnotationMirror mirrorLeft = a.get();
+              AnnotationMirror mirrorRight = b.get();
+              return typeEquivalence()
+                  .equivalent( mirrorLeft.getAnnotationType(), mirrorRight.getAnnotationType())
+                  && mirrorLeft.getElementValues().equals(mirrorRight.getElementValues());
+            }
+          }
+        }
+
+        @Override
+        protected int doHash(Optional<AnnotationMirror> t) {
+          return t.isPresent()
+              ? Objects.hashCode(t.get().getAnnotationType(), t.get().getElementValues())
+              : t.hashCode();
+        }
+      };
+
+  static Equivalence<Optional<AnnotationMirror>> annotationMirrorEquivalence() {
+    return ANNOTATION_MIRROR_EQUIVALENCE;
   }
 
   private static final TypeVisitor<Boolean, TypeMirror> EQUAL_VISITOR =

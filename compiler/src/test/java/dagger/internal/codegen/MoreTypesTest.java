@@ -68,7 +68,7 @@ public class MoreTypesTest {
         types.getDeclaredType(mapElement, objectType, objectType);
     TypeMirror mapType = mapElement.asType();
     WildcardType wildcard = types.getWildcardType(null, null);
-    EquivalenceTester<TypeMirror> tester = EquivalenceTester.<TypeMirror>of(MoreTypes.equivalence())
+    EquivalenceTester<TypeMirror> tester = EquivalenceTester.<TypeMirror>of(MoreTypes.typeEquivalence())
         .addEquivalenceGroup(types.getNullType())
         .addEquivalenceGroup(types.getNoType(NONE))
         .addEquivalenceGroup(types.getNoType(VOID))

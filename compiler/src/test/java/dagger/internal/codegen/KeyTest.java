@@ -15,18 +15,11 @@
  */
 package dagger.internal.codegen;
 
-import static dagger.Provides.Type.SET;
-import static dagger.Provides.Type.SET_VALUES;
-import static org.truth0.Truth.ASSERT;
-
 import com.google.common.collect.Iterables;
 import com.google.testing.compile.CompilationRule;
-
 import dagger.Module;
 import dagger.Provides;
-
 import java.util.Set;
-
 import javax.inject.Inject;
 import javax.inject.Qualifier;
 import javax.lang.model.element.ExecutableElement;
@@ -36,12 +29,15 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import static dagger.Provides.Type.SET;
+import static dagger.Provides.Type.SET_VALUES;
+import static org.truth0.Truth.ASSERT;
 
 /**
  * Tests {@link Key}.
@@ -62,7 +58,7 @@ public class KeyTest {
     ExecutableElement constructor =
         Iterables.getOnlyElement(ElementFilter.constructorsIn(typeElement.getEnclosedElements()));
     ASSERT.that(keyFactory.forInjectConstructor(constructor))
-        .isEqualTo(Key.create(typeElement.asType()));
+        .isEqualTo(keyFactory.forType(typeElement.asType()));
   }
 
   static final class InjectedClass {
@@ -77,7 +73,8 @@ public class KeyTest {
         elements.getTypeElement(ProvidesMethodModule.class.getCanonicalName());
     ExecutableElement providesMethod =
         Iterables.getOnlyElement(ElementFilter.methodsIn(moduleElement.getEnclosedElements()));
-    ASSERT.that(keyFactory.forProvidesMethod(providesMethod)).isEqualTo(Key.create(stringType));
+    ASSERT.that(keyFactory.forProvidesMethod(providesMethod))
+        .isEqualTo(keyFactory.forType(stringType));
   }
 
   @Module(library = true)
@@ -97,9 +94,9 @@ public class KeyTest {
     ExecutableElement providesMethod =
         Iterables.getOnlyElement(ElementFilter.methodsIn(moduleElement.getEnclosedElements()));
     Key key = keyFactory.forProvidesMethod(providesMethod);
-    ASSERT.that(MoreTypes.equivalence().wrap(key.qualifier().get().getAnnotationType()))
-        .isEqualTo(MoreTypes.equivalence().wrap(qualifierElement.asType()));
-    ASSERT.that(key.wrappedType()).isEqualTo(MoreTypes.equivalence().wrap(stringType));
+    ASSERT.that(MoreTypes.typeEquivalence().wrap(key.qualifier().get().getAnnotationType()))
+        .isEqualTo(MoreTypes.typeEquivalence().wrap(qualifierElement.asType()));
+    ASSERT.that(key.wrappedType()).isEqualTo(MoreTypes.typeEquivalence().wrap(stringType));
   }
 
   @Module(library = true)
@@ -123,7 +120,7 @@ public class KeyTest {
     for (ExecutableElement providesMethod
         : ElementFilter.methodsIn(moduleElement.getEnclosedElements())) {
       ASSERT.that(keyFactory.forProvidesMethod(providesMethod))
-          .isEqualTo(Key.create(setOfStringsType));
+          .isEqualTo(keyFactory.forType(setOfStringsType));
     }
   }
 

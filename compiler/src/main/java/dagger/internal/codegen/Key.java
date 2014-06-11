@@ -15,22 +15,12 @@
  */
 package dagger.internal.codegen;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static dagger.internal.codegen.InjectionAnnotations.getQualifier;
-import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
-import static javax.lang.model.element.ElementKind.METHOD;
-import static javax.lang.model.type.TypeKind.DECLARED;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Equivalence;
 import com.google.common.base.Objects;
 import com.google.common.base.Optional;
-
 import dagger.Provides;
-
 import java.util.Set;
-
 import javax.inject.Qualifier;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
@@ -41,6 +31,13 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static dagger.internal.codegen.InjectionAnnotations.getQualifier;
+import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
+import static javax.lang.model.element.ElementKind.METHOD;
+import static javax.lang.model.type.TypeKind.DECLARED;
+
 /**
  * Represents a unique combination of {@linkplain TypeMirror type} and
  * {@linkplain Qualifier qualifier} to which binding can occur.
@@ -49,13 +46,17 @@ import javax.lang.model.util.Types;
  */
 @AutoValue
 abstract class Key {
-  abstract Optional<AnnotationMirror> qualifier();
+  abstract Equivalence.Wrapper<Optional<AnnotationMirror>> wrappedQualifier();
 
   /**
    * As documented in {@link TypeMirror}, equals and hashCode aren't implemented to represent
-   * logical equality, so we use {@link MoreTypes#equivalence()} for this object.
+   * logical equality, so we use {@link MoreTypes#typeEquivalence()} for this object.
    */
   abstract Equivalence.Wrapper<TypeMirror> wrappedType();
+
+  Optional<AnnotationMirror> qualifier() {
+    return wrappedQualifier().get();
+  }
 
   TypeMirror type() {
     return wrappedType().get();
@@ -70,15 +71,6 @@ abstract class Key {
         .toString();
   }
 
-  static Key create(TypeMirror type) {
-    return new AutoValue_Key(Optional.<AnnotationMirror>absent(),
-        MoreTypes.equivalence().wrap(type));
-  }
-
-  static Key create(Optional<AnnotationMirror> qualifier, TypeMirror type) {
-    return new AutoValue_Key(qualifier, MoreTypes.equivalence().wrap(type));
-  }
-
   static final class Factory {
     private final Types types;
     private final Elements elements;
@@ -90,7 +82,7 @@ abstract class Key {
 
     private TypeMirror normalize(TypeMirror type) {
       TypeKind kind = type.getKind();
-      return kind.isPrimitive() ? types.getPrimitiveType(kind) : type;
+      return kind.isPrimitive() ? types.boxedClass(types.getPrimitiveType(kind)).asType() : type;
     }
 
     private TypeElement getSetElement() {
@@ -106,15 +98,18 @@ abstract class Key {
       Optional<AnnotationMirror> qualifier = getQualifier(e);
       switch (providesAnnotation.type()) {
         case UNIQUE:
-          return new AutoValue_Key(qualifier, MoreTypes.equivalence().wrap(returnType));
+          return new AutoValue_Key(MoreTypes.annotationMirrorEquivalence().wrap(qualifier),
+              MoreTypes.typeEquivalence().wrap(returnType));
         case SET:
           TypeMirror setType = types.getDeclaredType(getSetElement(), returnType);
-          return new AutoValue_Key(qualifier, MoreTypes.equivalence().wrap(setType));
+          return new AutoValue_Key(MoreTypes.annotationMirrorEquivalence().wrap(qualifier),
+              MoreTypes.typeEquivalence().wrap(setType));
         case SET_VALUES:
           // TODO(gak): do we want to allow people to use "covariant return" here?
           checkArgument(returnType.getKind().equals(DECLARED));
           checkArgument(((DeclaredType) returnType).asElement().equals(getSetElement()));
-          return new AutoValue_Key(qualifier, MoreTypes.equivalence().wrap(returnType));
+          return new AutoValue_Key(MoreTypes.annotationMirrorEquivalence().wrap(qualifier),
+              MoreTypes.typeEquivalence().wrap(returnType));
         default:
           throw new AssertionError();
       }
@@ -126,8 +121,21 @@ abstract class Key {
       checkArgument(!getQualifier(e).isPresent());
       // Must use the enclosing element.  The return type is void for constructors(?!)
       TypeMirror type = e.getEnclosingElement().asType();
-      return new AutoValue_Key(Optional.<AnnotationMirror>absent(),
-          MoreTypes.equivalence().wrap(type));
+      return new AutoValue_Key(
+          MoreTypes.annotationMirrorEquivalence().wrap(Optional.<AnnotationMirror>absent()),
+          MoreTypes.typeEquivalence().wrap(type));
+    }
+
+    Key forType(TypeMirror type) {
+      return new AutoValue_Key(
+          MoreTypes.annotationMirrorEquivalence().wrap(Optional.<AnnotationMirror>absent()),
+          MoreTypes.typeEquivalence().wrap(normalize(type)));
+    }
+
+    Key forQualifiedType(Optional<AnnotationMirror> qualifier, TypeMirror type) {
+      return new AutoValue_Key(
+          MoreTypes.annotationMirrorEquivalence().wrap(qualifier),
+          MoreTypes.typeEquivalence().wrap(normalize(type)));
     }
   }
 }
