@@ -18,6 +18,8 @@ package dagger.internal.codegen;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.common.MoreElements;
+import com.google.common.base.Equivalence;
+import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -84,6 +86,38 @@ final class AnnotationMirrors {
       builder.add((TypeMirror) typeValue.getValue());
     }
     return builder.build();
+  }
+
+  private static final Equivalence<Optional<AnnotationMirror>> ANNOTATION_MIRROR_EQUIVALENCE =
+    new Equivalence<Optional<AnnotationMirror>>() {
+      @Override
+      protected boolean doEquivalent(Optional<AnnotationMirror> a, Optional<AnnotationMirror> b) {
+        if (!a.isPresent()) {
+          return !b.isPresent();
+        } else {
+          if (!b.isPresent()) {
+            return false;
+          } else {
+            AnnotationMirror mirrorLeft = a.get();
+            AnnotationMirror mirrorRight = b.get();
+            // TODO(cgruber) DO NOT SUBMIT - fix value equivalence.
+            return MoreTypes.equivalence()
+                .equivalent(mirrorLeft.getAnnotationType(), mirrorRight.getAnnotationType())
+                && mirrorLeft.getElementValues().equals(mirrorRight.getElementValues());
+          }
+        }
+      }
+
+      @Override
+      protected int doHash(Optional<AnnotationMirror> t) {
+        return t.isPresent()
+            ? Objects.hashCode(t.get().getAnnotationType(), t.get().getElementValues())
+            : t.hashCode();
+      }
+    };
+
+  static Equivalence<Optional<AnnotationMirror>> equivalence() {
+    return ANNOTATION_MIRROR_EQUIVALENCE;
   }
 
   private AnnotationMirrors() {}
