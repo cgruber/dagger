@@ -138,7 +138,7 @@ public class KeyTest {
 
   @Qualifier
   @interface TestQualifier {
-    InnerAnnotation value();
+    InnerAnnotation[] value();
   }
 
   @interface InnerAnnotation {}

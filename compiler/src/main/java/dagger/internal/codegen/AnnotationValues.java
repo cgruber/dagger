@@ -27,7 +27,7 @@ import javax.lang.model.util.SimpleAnnotationValueVisitor6;
 /**
  * A utility class for working with {@link AnnotationValue} instances.
  *
- * @author Gregory Kick
+ * @author Christian Gruber
  */
 final class AnnotationValues {
 
