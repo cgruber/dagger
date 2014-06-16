@@ -30,6 +30,12 @@ import org.junit.runners.JUnit4;
 import static com.google.testing.compile.JavaSourceSubjectFactory.javaSource;
 import static org.truth0.Truth.ASSERT;
 
+/**
+ * A scanner to ensure that the processing environment is providing a valid syntax
+ * tree before processing
+ *
+ * @author Christian Gruber
+ */
 @RunWith(JUnit4.class)
 public class ValidatingScannerTest {
   @Test public void bestGuessForString_simpleClass() {
@@ -37,15 +43,15 @@ public class ValidatingScannerTest {
         "package test;",
         "",
         "import dagger.Module;",
+        "import javax.inject.Named;",
         "",
         "@Module",
         "class FooModule {",
         "  @Provides @Named(\"Foo\") String string() { return \"Foo\"; }",
         "}");
-    ASSERT.about(javaSource()).that(file).processedWith(new TestProcessor())
+    ASSERT.about(javaSource()).that(file)
+       .processedWith(new TestProcessor(), new ComponentProcessor())
       .compilesWithoutError();
-
-
   }
 
 
