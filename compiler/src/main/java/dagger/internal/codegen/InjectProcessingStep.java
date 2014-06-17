@@ -52,7 +52,7 @@ public final class InjectProcessingStep implements ProcessingStep {
   private final FactoryGenerator factoryGenerator;
   private final InjectionSite.Factory injectionSiteFactory;
   private final MembersInjectorGenerator membersInjectorWriter;
-  private final InjectBindingRegistry injectBindingRegistry;
+  private final BindingRegistry bindingRegistry;
 
 
   InjectProcessingStep(Messager messager,
@@ -63,7 +63,7 @@ public final class InjectProcessingStep implements ProcessingStep {
       FactoryGenerator factoryGenerator,
       InjectionSite.Factory injectionSiteFactory,
       MembersInjectorGenerator membersInjectorWriter,
-      InjectBindingRegistry factoryRegistrar) {
+      BindingRegistry bindingRegistry) {
     this.messager = messager;
     this.constructorValidator = constructorValidator;
     this.fieldValidator = fieldValidator;
@@ -72,7 +72,7 @@ public final class InjectProcessingStep implements ProcessingStep {
     this.factoryGenerator = factoryGenerator;
     this.injectionSiteFactory = injectionSiteFactory;
     this.membersInjectorWriter = membersInjectorWriter;
-    this.injectBindingRegistry = factoryRegistrar;
+    this.bindingRegistry = bindingRegistry;
   }
 
   @Override
@@ -138,7 +138,7 @@ public final class InjectProcessingStep implements ProcessingStep {
       try {
         MembersInjectionBinding binding = MembersInjectionBinding.create(injectionSites);
         membersInjectorWriter.generate(binding);
-        injectBindingRegistry.registerMembersInjectionBinding(binding);
+        bindingRegistry.membersInjections().register(binding);
       } catch (SourceFileGenerationException e) {
         e.printMessageTo(messager);
       }
@@ -147,7 +147,7 @@ public final class InjectProcessingStep implements ProcessingStep {
     for (ProvisionBinding binding : provisions.build()) {
       try {
         factoryGenerator.generate(binding);
-        injectBindingRegistry.registerProvisionBinding(binding);
+        bindingRegistry.provisions().register(binding);
       } catch (SourceFileGenerationException e) {
         e.printMessageTo(messager);
       }

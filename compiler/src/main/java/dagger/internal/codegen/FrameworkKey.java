@@ -16,6 +16,7 @@
 package dagger.internal.codegen;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.base.Function;
 import dagger.MembersInjector;
 import javax.inject.Provider;
 
@@ -50,4 +51,12 @@ abstract class FrameworkKey {
 
   abstract Key key();
   abstract Class<?> frameworkClass();
+
+  static Function<DependencyRequest, FrameworkKey> REQUEST_TO_FRAMEWORK_KEY =
+      new Function<DependencyRequest, FrameworkKey>() {
+        @Override public FrameworkKey apply(DependencyRequest request) {
+          return FrameworkKey.forDependencyRequest(request);
+        }
+      };
+
 }

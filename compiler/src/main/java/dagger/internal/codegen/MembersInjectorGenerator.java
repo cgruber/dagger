@@ -97,18 +97,18 @@ final class MembersInjectorGenerator extends SourceFileGenerator<MembersInjectio
 
   @Override
   Optional<? extends Element> getElementForErrorReporting(MembersInjectionBinding binding) {
-    return Optional.of(binding.injectedType());
+    return Optional.of(binding.typeElement());
   }
 
   @Override
   void write(ClassName injectorClassName, JavaWriter writer, MembersInjectionBinding binding)
       throws IOException {
-    ClassName injectedClassName = ClassName.fromTypeElement(binding.injectedType());
+    ClassName injectedClassName = ClassName.fromTypeElement(binding.typeElement());
 
     writer.emitPackage(injectedClassName.packageName());
 
-    ImmutableSet<DependencyRequest> dependencies = binding.dependencySet();
-    Optional<TypeElement> supertype = supertype(binding.injectedType());
+    ImmutableSet<DependencyRequest> dependencies = binding.dependencies();
+    Optional<TypeElement> supertype = supertype(binding.typeElement());
 
     List<ClassName> importsBuilder = new ArrayList<ClassName>();
     importsBuilder.addAll(collectImportsFromDependencies(injectorClassName, dependencies));

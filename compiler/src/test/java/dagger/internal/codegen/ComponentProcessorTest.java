@@ -320,6 +320,14 @@ public class ComponentProcessorTest {
         "final class C {",
         "  @Inject C() {}",
         "}");
+    JavaFileObject qFile = JavaFileObjects.forSourceLines("test.Q",
+        "package test;",
+        "",
+        "import javax.inject.Inject;",
+        "",
+        "final class Q {",
+        "  @Inject Q(C c) {}",
+        "}");
 
     JavaFileObject moduleFile = JavaFileObjects.forSourceLines("test.TestModule",
         "package test;",
@@ -342,6 +350,8 @@ public class ComponentProcessorTest {
         "@Component(modules = TestModule.class)",
         "interface TestComponent {",
         "  A a();",
+        "  C c();",
+        "  Q q();",
         "}");
     JavaFileObject generatedComponent = JavaFileObjects.forSourceLines(
         "test.Dagger_TestComponent",
@@ -356,6 +366,7 @@ public class ComponentProcessorTest {
         "  private final Provider<A> aProvider;",
         "  private final Provider<B> bProvider;",
         "  private final Provider<C> cProvider;",
+        "  private final Provider<Q> qProvider;",
         "",
         "  public Dagger_TestComponent(TestModule testModule) {",
         "    if (testModule == null) {",
@@ -363,6 +374,7 @@ public class ComponentProcessorTest {
         "    }",
         "    this.testModule = testModule;",
         "    this.cProvider = new C$$Factory();",
+        "    this.qProvider = new Q$$Factory(cProvider);",
         "    this.bProvider = new TestModule$$BFactory(testModule, cProvider);",
         "    this.aProvider = new A$$Factory(bProvider);",
         "  }",
@@ -370,9 +382,15 @@ public class ComponentProcessorTest {
         "  @Override public A a() {",
         "    return aProvider.get();",
         "  }",
+        "  @Override public C c() {",
+        "    return cProvider.get();",
+        "  }",
+        "  @Override public Q q() {",
+        "    return qProvider.get();",
+        "  }",
         "}");
     ASSERT.about(javaSources())
-        .that(ImmutableList.of(aFile, bFile, cFile, moduleFile, componentFile))
+        .that(ImmutableList.of(aFile, bFile, cFile, qFile, moduleFile, componentFile))
         .processedWith(new ComponentProcessor())
         .compilesWithoutError()
         .and().generatesSources(generatedComponent);

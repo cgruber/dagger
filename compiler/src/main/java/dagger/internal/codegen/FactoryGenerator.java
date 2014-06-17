@@ -111,20 +111,20 @@ final class FactoryGenerator extends SourceFileGenerator<ProvisionBinding> {
     ImmutableMap.Builder<String, String> variableMapBuilder =
         new ImmutableMap.Builder<String, String>();
     if (binding.bindingKind().equals(PROVISION)) {
-      variableMapBuilder.put("module", binding.bindingTypeElement().getQualifiedName().toString());
+      variableMapBuilder.put("module", binding.typeElement().getQualifiedName().toString());
     }
-    if (binding.requiresMemberInjection()) {
+    if (binding.membersInjector().isPresent()) {
       variableMapBuilder.put("membersInjector", type(MembersInjector.class, providedTypeString));
     }
     ImmutableMap<String, String> variableMap = variableMapBuilder
         .putAll(providersAsVariableMap(providerNames))
         .build();
 
-    if (binding.requiresMemberInjection()) {
+    if (binding.membersInjector().isPresent()) {
       writeMembersInjectorField(writer, providedTypeString);
     }
     if (binding.bindingKind().equals(PROVISION)) {
-      writeModuleField(writer, binding.bindingTypeElement());
+      writeModuleField(writer, binding.typeElement());
     }
     writeProviderFields(writer, providerNames);
 
@@ -144,14 +144,14 @@ final class FactoryGenerator extends SourceFileGenerator<ProvisionBinding> {
             .addAll(collectImportsFromDependencies(factoryClassName, binding.dependencies()))
             .add(ClassName.fromClass(Factory.class))
             .add(ClassName.fromClass(Generated.class));
-    ClassName bindingClassName = ClassName.fromTypeElement(binding.bindingTypeElement());
-    if(!bindingClassName.enclosingSimpleNames().isEmpty()) {
+    ClassName bindingClassName = ClassName.fromTypeElement(binding.typeElement());
+    if (!bindingClassName.enclosingSimpleNames().isEmpty()) {
       importsBuilder.add(bindingClassName);
     }
     if (binding.provisionType().equals(Provides.Type.SET)) {
       importsBuilder.add(ClassName.fromClass(Collections.class));
     }
-    if (binding.requiresMemberInjection()) {
+    if (binding.membersInjector().isPresent()) {
       importsBuilder.add(ClassName.fromClass(MembersInjector.class));
     }
     for (TypeElement referencedProvidedType : MoreTypes.referencedTypes(providedType)) {
@@ -228,7 +228,7 @@ final class FactoryGenerator extends SourceFileGenerator<ProvisionBinding> {
         default:
           throw new AssertionError();
       }
-    } else if (binding.requiresMemberInjection()) {
+    } else if (binding.membersInjector().isPresent()) {
       writer.emitStatement("%1$s instance = new %1$s(%2$s)",
           writer.compressType(providedTypeString), parameterString);
       writer.emitStatement("membersInjector.injectMembers(instance)");

@@ -22,7 +22,6 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
@@ -45,7 +44,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @since 2.0
  */
 @AutoValue
-abstract class MembersInjectionBinding {
+abstract class MembersInjectionBinding extends Binding {
   /**
    * Creates a {@link MembersInjectionBinding} for the given bindings.
    *
@@ -65,13 +64,17 @@ abstract class MembersInjectionBinding {
   }
 
   /** The type on which members are injected. */
-  abstract TypeElement injectedType();
+  @Override
+  final TypeElement typeElement() {
+    return (TypeElement) bindingElement();
+  }
 
   /** The set of individual sites where {@link Inject} is applied. */
   abstract ImmutableSortedSet<InjectionSite> injectionSites();
 
   /** The total set of dependencies required by all injection sites. */
-  final ImmutableSet<DependencyRequest> dependencySet() {
+  @Override
+  final ImmutableSet<DependencyRequest> dependencies() {
     return FluentIterable.from(injectionSites())
         .transformAndConcat(new Function<InjectionSite, List<DependencyRequest>>() {
           @Override public List<DependencyRequest> apply(InjectionSite input) {
@@ -79,14 +82,6 @@ abstract class MembersInjectionBinding {
           }
         })
         .toSet();
-  }
-
-  ImmutableSetMultimap<Key, DependencyRequest> dependenciesByKey() {
-    ImmutableSetMultimap.Builder<Key, DependencyRequest> builder = ImmutableSetMultimap.builder();
-    for (DependencyRequest dependency : dependencySet()) {
-      builder.put(dependency.key(), dependency);
-    }
-    return builder.build();
   }
 
   private static final Ordering<InjectionSite> INJECTION_ORDERING =

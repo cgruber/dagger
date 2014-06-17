@@ -180,7 +180,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
       if (binding.provisionType().equals(SET) || binding.provisionType().equals(SET_VALUES)) {
         importsBuilder.add(ClassName.fromClass(SetFactory.class));
       }
-      if (binding.requiresMemberInjection()) {
+      if (binding.membersInjector().isPresent()) {
         importsBuilder.add(ClassName.fromClass(MembersInjector.class));
       }
       for (TypeElement referencedType : MoreTypes.referencedTypes(binding.providedKey().type())) {
@@ -228,7 +228,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   }
 
   private void writeConstructor(final JavaWriter writer,
-      ImmutableList<FrameworkKey> initializationOrdering,
+      ImmutableMap<FrameworkKey, Binding> resolvedBindings,
       ImmutableSetMultimap<Key, ProvisionBinding> resolvedProvisionBindings,
       ImmutableMap<Key, MembersInjectionBinding> resolvedMembersInjectionBindings,
       ImmutableBiMap<Key, String> providerNames,
@@ -252,37 +252,35 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
       writer.emitStatement("this.%1$s = %1$s", variableName);
     }
 
-    for (FrameworkKey frameworkKey : initializationOrdering) {
-      Key key = frameworkKey.key();
-      if (frameworkKey.frameworkClass().equals(Provider.class)) {
-        Set<ProvisionBinding> bindings = resolvedProvisionBindings.get(key);
-        if (ProvisionBinding.isSetBindingCollection(bindings)) {
-          ImmutableList.Builder<String> setFactoryParameters = ImmutableList.builder();
-          for (ProvisionBinding binding : bindings) {
-            setFactoryParameters.add(initializeFactoryForBinding(
-                writer, binding, moduleNames, providerNames,membersInjectorNames));
-          }
-          writer.emitStatement("this.%s = SetFactory.create(%n%s)",
-              providerNames.get(key),
-              Joiner.on(",\n").join(setFactoryParameters.build()));
-        } else {
-          ProvisionBinding binding = Iterables.getOnlyElement(bindings);
-          writer.emitStatement("this.%s = %s",
-              providerNames.get(key),
-              initializeFactoryForBinding(
-                  writer, binding, moduleNames, providerNames, membersInjectorNames));
-        }
-      } else if (frameworkKey.frameworkClass().equals(MembersInjector.class)) {
+    for (Map.Entry<FrameworkKey, Binding> initItem : resolvedBindings.entrySet()) {
+      Key key = initItem.getKey().key();
+      if (initItem.getKey().frameworkClass().equals(MembersInjector.class)) {
         writer.emitStatement("this.%s = %s",
             membersInjectorNames.get(key),
             initializeMembersInjectorForBinding(writer, resolvedMembersInjectionBindings.get(key),
                 providerNames, membersInjectorNames));
+      } else if (initItem.getKey().frameworkClass().equals(Provider.class)) {
+          Set<ProvisionBinding> bindings = resolvedProvisionBindings.get(key);
+          if (ProvisionBinding.isSetBindingCollection(bindings)) {
+            ImmutableList.Builder<String> setFactoryParameters = ImmutableList.builder();
+            for (ProvisionBinding binding : bindings) {
+              setFactoryParameters.add(initializeFactoryForBinding(
+                  writer, binding, moduleNames, providerNames,membersInjectorNames));
+            }
+            writer.emitStatement("this.%s = SetFactory.create(%n%s)",
+                providerNames.get(key),
+                Joiner.on(",\n").join(setFactoryParameters.build()));
+          } else {
+            ProvisionBinding binding = Iterables.getOnlyElement(bindings);
+            writer.emitStatement("this.%s = %s",
+                providerNames.get(key),
+                initializeFactoryForBinding(
+                    writer, binding, moduleNames, providerNames, membersInjectorNames));
+          }
       } else {
-        throw new IllegalStateException(
-            "unknown framework class: " + frameworkKey.frameworkClass());
+          throw new AssertionError("Unknown initialization kind: " + initItem.getKey());
       }
     }
-
     writer.endConstructor().emitEmptyLine();
   }
 
@@ -296,9 +294,9 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
     } else {
       List<String> parameters = Lists.newArrayListWithCapacity(binding.dependencies().size() + 1);
       if (binding.bindingKind().equals(PROVISION)) {
-        parameters.add(moduleNames.get(binding.bindingTypeElement()));
+        parameters.add(moduleNames.get(binding.typeElement()));
       }
-      if (binding.requiresMemberInjection()) {
+      if (binding.membersInjector().isPresent()) {
         String membersInjectorName =
             membersInjectorNames.get(keyFactory.forType(binding.providedKey().type()));
         if (membersInjectorName != null) {
@@ -320,8 +318,8 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
       MembersInjectionBinding binding,
       ImmutableBiMap<Key, String> providerNames,
       ImmutableBiMap<Key, String> membersInjectorNames) {
-    List<String> parameters = getDependencyParameters(binding.dependencySet(),
-        providerNames, membersInjectorNames);
+    List<String> parameters =
+        getDependencyParameters(binding.dependencies(), providerNames, membersInjectorNames);
     return String.format("new %s(%s)",
         writer.compressType(membersInjectorNameForMembersInjectionBinding(binding).toString()),
         Joiner.on(", ").join(parameters));

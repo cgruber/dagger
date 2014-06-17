@@ -75,7 +75,7 @@ public final class ComponentProcessor extends AbstractProcessor {
 
     Key.Factory keyFactory = new Key.Factory(types, elements);
 
-    InjectBindingRegistry injectBindingRegistry = new InjectBindingRegistry(keyFactory);
+    BindingRegistry bindingRegistry = new BindingRegistry(keyFactory);
 
     DependencyRequest.Factory dependencyRequestFactory =
         new DependencyRequest.Factory(elements, types, keyFactory);
@@ -84,7 +84,7 @@ public final class ComponentProcessor extends AbstractProcessor {
     InjectionSite.Factory injectionSiteFactory =
         new InjectionSite.Factory(dependencyRequestFactory);
     ComponentDescriptor.Factory componentDescriptorFactory =
-        new ComponentDescriptor.Factory(elements, types, injectBindingRegistry,
+        new ComponentDescriptor.Factory(elements, types, bindingRegistry,
             provisionBindingFactory, dependencyRequestFactory);
 
     FactoryGenerator factoryGenerator = new FactoryGenerator(filer, elements, types);
@@ -103,7 +103,7 @@ public final class ComponentProcessor extends AbstractProcessor {
             factoryGenerator,
             injectionSiteFactory,
             membersInjectorGenerator,
-            injectBindingRegistry),
+            bindingRegistry),
         new ModuleProcesssingStep(
             messager,
             moduleValidator,

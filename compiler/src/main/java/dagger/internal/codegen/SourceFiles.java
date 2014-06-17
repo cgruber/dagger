@@ -229,7 +229,7 @@ class SourceFiles {
         new Function<MembersInjectionBinding, String>() {
           @Override public String apply(MembersInjectionBinding input) {
             return CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL,
-                input.injectedType().getSimpleName().toString()) + "MembersInjector";
+                input.typeElement().getSimpleName().toString()) + "MembersInjector";
           }
         }));
   }
@@ -250,7 +250,7 @@ class SourceFiles {
   }
 
   static ClassName factoryNameForProvisionBinding(ProvisionBinding binding) {
-    TypeElement enclosingTypeElement = binding.bindingTypeElement();
+    TypeElement enclosingTypeElement = binding.typeElement();
     ClassName enclosingClassName = ClassName.fromTypeElement(enclosingTypeElement);
     switch (binding.bindingKind()) {
       case INJECTION:
@@ -263,7 +263,7 @@ class SourceFiles {
   }
 
   static ClassName membersInjectorNameForMembersInjectionBinding(MembersInjectionBinding binding) {
-    ClassName injectedClassName = ClassName.fromTypeElement(binding.injectedType());
+    ClassName injectedClassName = ClassName.fromTypeElement(binding.typeElement());
     return injectedClassName.topLevelClassName().peerNamed(
         injectedClassName.classFileName() + "$$MembersInjector");
   }

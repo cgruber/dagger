@@ -16,8 +16,8 @@
 package dagger.internal.codegen;
 
 import com.google.auto.common.MoreElements;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableMap;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.SimpleElementVisitor6;
@@ -31,14 +31,14 @@ import javax.lang.model.util.SimpleElementVisitor6;
  * @author Gregory Kick
  * @since 2.0
  */
-// TODO(gak): make a decision about whether or not to bring MembersInjectionBinding under this
-// supertype or whether to just get rid of this.
 abstract class Binding {
   /** Returns the {@link Element} instance that is responsible for declaring the binding. */
   abstract Element bindingElement();
 
-  /** The type enclosing the binding {@link #bindingElement()}. */
-  TypeElement bindingTypeElement() {
+  /**
+   * The type relevant to the {@link #bindingElement()}, either itself, or its enclosing element.
+   */
+  TypeElement typeElement() {
     return bindingElement().accept(new SimpleElementVisitor6<TypeElement, Void>() {
       @Override
       protected TypeElement defaultAction(Element e, Void p) {
@@ -53,13 +53,13 @@ abstract class Binding {
   }
 
   /** The list of {@link DependencyRequest dependencies} required to satisfy this binding. */
-  abstract ImmutableList<DependencyRequest> dependencies();
+  abstract ImmutableCollection<DependencyRequest> dependencies();
 
   /** Returns the {@link #dependencies()} indexed by {@link Key}. */
-  ImmutableSetMultimap<Key, DependencyRequest> dependenciesByKey() {
-    ImmutableSetMultimap.Builder<Key, DependencyRequest> builder = ImmutableSetMultimap.builder();
+  ImmutableMap<FrameworkKey, DependencyRequest> dependenciesByKey() {
+    ImmutableMap.Builder<FrameworkKey, DependencyRequest> builder = ImmutableMap.builder();
     for (DependencyRequest dependency : dependencies()) {
-      builder.put(dependency.key(), dependency);
+      builder.put(FrameworkKey.forDependencyRequest(dependency), dependency);
     }
     return builder.build();
   }

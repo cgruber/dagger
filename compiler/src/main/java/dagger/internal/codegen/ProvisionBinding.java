@@ -76,8 +76,11 @@ abstract class ProvisionBinding extends Binding {
   /** The scope in which the binding declares the {@link #providedKey()}. */
   abstract Optional<AnnotationMirror> scope();
 
-  /** Returns {@code true} if this provision binding requires members to be injected implicitly. */
-  abstract boolean requiresMemberInjection();
+  /**
+   * Optionally returns a {@code DependencyRequest} for an appropriate {@code MembersInjector}
+   * if this provision binding requires members to be injected implicitly.
+   */
+  abstract Optional<DependencyRequest> membersInjector();
 
   private static ImmutableSet<Provides.Type> SET_BINDING_TYPES = immutableEnumSet(SET, SET_VALUES);
 
@@ -127,25 +130,24 @@ abstract class ProvisionBinding extends Binding {
           Provides.Type.UNIQUE,
           key,
           getScopeAnnotation(constructorElement.getEnclosingElement()),
-          requiresMemeberInjection(
-              MoreElements.asType(constructorElement.getEnclosingElement())));
+          membersInjectorRequest(MoreElements.asType(constructorElement.getEnclosingElement())));
     }
 
     private static final ImmutableSet<ElementKind> MEMBER_KINDS =
         Sets.immutableEnumSet(METHOD, FIELD);
 
-    private boolean requiresMemeberInjection(TypeElement type) {
+    private Optional<DependencyRequest> membersInjectorRequest(TypeElement type) {
       if (!types.isSameType(elements.getTypeElement(Object.class.getCanonicalName()).asType(),
           type.getSuperclass())) {
-        return true;
+        return Optional.of(dependencyRequestFactory.forMembersInjectedType(type.asType()));
       }
       for (Element enclosedElement : type.getEnclosedElements()) {
         if (MEMBER_KINDS.contains(enclosedElement.getKind())
             && (enclosedElement.getAnnotation(Inject.class) != null)) {
-          return true;
+          return Optional.of(dependencyRequestFactory.forMembersInjectedType(type.asType()));
         }
       }
-      return false;
+      return Optional.absent();
     }
 
     ProvisionBinding forProvidesMethod(ExecutableElement providesMethod) {
@@ -160,7 +162,7 @@ abstract class ProvisionBinding extends Binding {
           providesAnnotation.type(),
           keyFactory.forProvidesMethod(providesMethod),
           getScopeAnnotation(providesMethod),
-          false);
+          Optional.<DependencyRequest>absent());
     }
 
     ProvisionBinding forComponent(TypeElement componentDefinitionType) {
@@ -174,7 +176,7 @@ abstract class ProvisionBinding extends Binding {
           Provides.Type.UNIQUE,
           keyFactory.forType(componentDefinitionType.asType()),
           Optional.<AnnotationMirror>absent(),
-          false);
+          Optional.<DependencyRequest>absent());
     }
   }
 }

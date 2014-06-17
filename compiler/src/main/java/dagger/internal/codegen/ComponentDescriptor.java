@@ -44,13 +44,14 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
 import static dagger.internal.codegen.AnnotationMirrors.getAnnotationMirror;
-import static dagger.internal.codegen.DependencyRequest.Kind.MEMBERS_INJECTOR;
+import static dagger.internal.codegen.FrameworkKey.REQUEST_TO_FRAMEWORK_KEY;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 
 /**
  * The logical representation of a {@link Component} definition.
  *
  * @author Gregory Kick
+ * @author Christian Gruber
  * @since 2.0
  */
 @AutoValue
@@ -93,16 +94,19 @@ abstract class ComponentDescriptor {
    * The ordering of {@link Key keys} that will allow all of the {@link Factory} and
    * {@link MembersInjector} implementations to initialize properly.
    */
-  abstract ImmutableList<FrameworkKey> initializationOrdering();
+  abstract ImmutableMap<FrameworkKey, Binding> initializationOrdering();
 
   static final class Factory {
     private final Elements elements;
     private final Types types;
-    private final InjectBindingRegistry injectBindingRegistry;
+    private final BindingRegistry injectBindingRegistry;
     private final ProvisionBinding.Factory provisionBindingFactory;
     private final DependencyRequest.Factory dependencyRequestFactory;
 
-    Factory(Elements elements, Types types, InjectBindingRegistry injectBindingRegistry,
+    Factory(
+        Elements elements,
+        Types types,
+        BindingRegistry injectBindingRegistry,
         ProvisionBinding.Factory provisionBindingFactory,
         DependencyRequest.Factory dependencyRequestFactory) {
       this.elements = elements;
@@ -193,54 +197,76 @@ abstract class ComponentDescriptor {
 
       SetMultimap<Key, ProvisionBinding> resolvedProvisionBindings = LinkedHashMultimap.create();
       Map<Key, MembersInjectionBinding> resolvedMembersInjectionBindings = Maps.newLinkedHashMap();
-      // TODO(gak): we're really going to need to test this ordering
-      ImmutableSet.Builder<FrameworkKey> resolutionOrder = ImmutableSet.builder();
+      Map<FrameworkKey, Binding> resolvedRequests = Maps.newLinkedHashMap();
 
       for (DependencyRequest requestToResolve = requestsToResolve.pollLast();
           requestToResolve != null;
           requestToResolve = requestsToResolve.pollLast()) {
         Key key = requestToResolve.key();
-        if (requestToResolve.kind().equals(MEMBERS_INJECTOR)) {
-          if (!resolvedMembersInjectionBindings.containsKey(key)) {
-            Optional<MembersInjectionBinding> binding =
-                injectBindingRegistry.getMembersInjectionBindingForKey(key);
-            if (binding.isPresent()) {
-              requestsToResolve.addAll(binding.get().dependencySet());
-              resolvedMembersInjectionBindings.put(key, binding.get());
-            } else {
-              // check and generate.
+        FrameworkKey interfaceKey = FrameworkKey.forDependencyRequest(requestToResolve);
+        switch (requestToResolve.kind()) {
+          case MEMBERS_INJECTOR:
+            if (!resolvedRequests.containsKey(interfaceKey)) {
+              Optional<MembersInjectionBinding> binding =
+                  injectBindingRegistry.membersInjections().getBindingForKey(key);
+              if (binding.isPresent()) {
+                if (resolvedRequests.keySet()
+                    .containsAll(binding.get().dependenciesByKey().keySet())) {
+                  resolvedMembersInjectionBindings.put(key, binding.get());
+                  resolvedRequests.put(interfaceKey, binding.get());
+                } else {
+                  // Push on the stack until its dependencies are resolved.
+                  requestsToResolve.add(requestToResolve);
+                  requestsToResolve.addAll(binding.get().dependencies());
+                }
+              } else {
+                // TODO: check and generate.
+                throw new UnsupportedOperationException(
+                    "MembersInjectors that weren't run with the component processor are "
+                        + "(briefly) unsupported: " + key);
+              }
             }
-          }
-        } else { // all other requests are provision requests
-          if (!resolvedProvisionBindings.containsKey(key)) {
+            break;
+          case INSTANCE:
+          case LAZY:
+          case PROVIDER:
+            // all non-MEMBERS_INJECTOR requests are provision requests
             ImmutableSet<ProvisionBinding> explicitBindingsForKey = explicitBindings.get(key);
             if (explicitBindingsForKey.isEmpty()) {
-              Optional<ProvisionBinding> injectBinding =
-                  injectBindingRegistry.getProvisionBindingForKey(key);
-              if (injectBinding.isPresent()) {
-                requestsToResolve.addAll(injectBinding.get().dependencies());
-                resolvedProvisionBindings.put(key, injectBinding.get());
-                if (injectBinding.get().requiresMemberInjection()) {
-                  DependencyRequest forMembersInjectedType =
-                      dependencyRequestFactory.forMembersInjectedType(
-                          injectBinding.get().providedKey().type());
-                  requestsToResolve.add(forMembersInjectedType);
+              // @Inject Constructor
+
+              if (injectBindingRegistry.provisions().getBindingForKey(key).isPresent()) {
+                ProvisionBinding binding =
+                    injectBindingRegistry.provisions().getBindingForKey(key).get();
+
+                if (resolvedRequests.keySet().containsAll(binding.dependenciesByKey().keySet())
+                    && resolvedRequests.keySet().containsAll(
+                        binding.membersInjector().transform(REQUEST_TO_FRAMEWORK_KEY).asSet())) {
+                  resolvedProvisionBindings.put(key, binding);
+                  resolvedRequests.put(interfaceKey, binding);
+                } else {
+                  // Push on the stack until its dependencies are resolved.
+                  requestsToResolve.add(requestToResolve);
+                  requestsToResolve.addAll(binding.membersInjector().asSet());
+                  requestsToResolve.addAll(binding.dependencies());
                 }
               } else {
                 // TODO(gak): support this
                 throw new UnsupportedOperationException(
-                    "@Injected classes that weren't run with the compoenent processor are "
+                    "@Injected classes that weren't run with the component processor are "
                         + "(briefly) unsupported: " + key);
               }
             } else {
               resolvedProvisionBindings.putAll(key, explicitBindingsForKey);
+              resolvedRequests.put(interfaceKey, explicitBindingsForKey.iterator().next());
             }
-            for (ProvisionBinding binding : explicitBindingsForKey) {
-              requestsToResolve.addAll(binding.dependencies());
+            for (ProvisionBinding provisionBinding : explicitBindingsForKey) {
+              requestsToResolve.addAll(provisionBinding.dependencies());
             }
-          }
+            break;
+          default:
+            throw new AssertionError("Unknown request kind for: " + requestToResolve);
         }
-        resolutionOrder.add(FrameworkKey.forDependencyRequest(requestToResolve));
       }
 
       return new AutoValue_ComponentDescriptor(
@@ -249,7 +275,8 @@ abstract class ComponentDescriptor {
           moduleTypes,
           ImmutableSetMultimap.copyOf(resolvedProvisionBindings),
           ImmutableMap.copyOf(resolvedMembersInjectionBindings),
-          resolutionOrder.build().asList().reverse());
+          ImmutableMap.copyOf(resolvedRequests));
     }
   }
 }
+
