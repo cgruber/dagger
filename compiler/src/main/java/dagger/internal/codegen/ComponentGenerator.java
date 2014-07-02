@@ -68,7 +68,7 @@ import static dagger.internal.codegen.ProvisionBinding.Kind.PROVISION;
 import static dagger.internal.codegen.SourceFiles.collectImportsFromDependencies;
 import static dagger.internal.codegen.SourceFiles.factoryNameForProvisionBinding;
 import static dagger.internal.codegen.SourceFiles.flattenVariableMap;
-import static dagger.internal.codegen.SourceFiles.generateMembersInjectorNamesForBindings;
+import static dagger.internal.codegen.SourceFiles.generateMembersInjectorNames;
 import static dagger.internal.codegen.SourceFiles.generateProviderNamesForBindings;
 import static dagger.internal.codegen.SourceFiles.membersInjectorNameForMembersInjectionBinding;
 import static dagger.internal.codegen.SourceFiles.providerUsageStatement;
@@ -125,15 +125,8 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
     writer.beginType(componentName.simpleName(), "class", EnumSet.of(PUBLIC, FINAL), null,
         input.componentDefinitionType().getQualifiedName().toString());
 
-    ImmutableSetMultimap<Key, ProvisionBinding> resolvedProvisionBindings =
-        input.resolvedProvisionBindings();
-    ImmutableMap<Key, MembersInjectionBinding> resolvedMembersInjectionBindings =
-        input.resolvedMembersInjectionBindings();
-
-    ImmutableBiMap<Key, String> providerNames =
-        generateProviderNamesForBindings(resolvedProvisionBindings);
-    ImmutableBiMap<Key, String> membersInjectorNames =
-        generateMembersInjectorNamesForBindings(resolvedMembersInjectionBindings);
+    ImmutableBiMap<Key, String> providerNames = generateProviderNamesForBindings(input);
+    ImmutableBiMap<FrameworkKey, String> membersInjectorNames = generateMembersInjectorNames(input);
 
     ImmutableBiMap<TypeElement, String> moduleNames =
         ImmutableBiMap.copyOf(Maps.asMap(input.moduleDependencies(), Functions.compose(
@@ -148,8 +141,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
     writeProviderFields(writer, providerNames);
     writeMembersInjectorFields(writer, membersInjectorNames);
 
-    writeConstructor(writer, input.initializationOrdering(), resolvedProvisionBindings,
-        resolvedMembersInjectionBindings, providerNames, moduleNames, membersInjectorNames);
+    writeConstructor(writer, input.bindings(), providerNames, moduleNames, membersInjectorNames);
 
     writeInterfaceMethods(writer, input.interfaceRequests(), providerNames, membersInjectorNames);
 
@@ -216,9 +208,9 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   }
 
   private void writeMembersInjectorFields(JavaWriter writer,
-      ImmutableBiMap<Key, String> membersInjectorNames) throws IOException {
-    for (Entry<Key, String> providerEntry : membersInjectorNames.entrySet()) {
-      Key key = providerEntry.getKey();
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames) throws IOException {
+    for (Entry<FrameworkKey, String> providerEntry : membersInjectorNames.entrySet()) {
+      Key key = providerEntry.getKey().key();
       // TODO(gak): provide more elaborate information about which requests relate
       writer.emitJavadoc(key.toString())
           .emitField(membersInjectorTypeString(key), providerEntry.getValue(),
@@ -230,10 +222,9 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   private void writeConstructor(final JavaWriter writer,
       ImmutableMap<FrameworkKey, Binding> resolvedBindings,
       ImmutableSetMultimap<Key, ProvisionBinding> resolvedProvisionBindings,
-      ImmutableMap<Key, MembersInjectionBinding> resolvedMembersInjectionBindings,
       ImmutableBiMap<Key, String> providerNames,
       ImmutableBiMap<TypeElement, String> moduleNames,
-      ImmutableBiMap<Key, String> membersInjectorNames)
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames)
           throws IOException {
     Map<String, String> variableMap =
         Maps.transformValues(moduleNames.inverse(), new Function<TypeElement, String>() {
@@ -257,7 +248,8 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
       if (initItem.getKey().frameworkClass().equals(MembersInjector.class)) {
         writer.emitStatement("this.%s = %s",
             membersInjectorNames.get(key),
-            initializeMembersInjectorForBinding(writer, resolvedMembersInjectionBindings.get(key),
+            initializeMembersInjectorForBinding(writer,
+                (MembersInjectionBinding) initItem.getValue(),
                 providerNames, membersInjectorNames));
       } else if (initItem.getKey().frameworkClass().equals(Provider.class)) {
           Set<ProvisionBinding> bindings = resolvedProvisionBindings.get(key);
@@ -287,7 +279,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   private String initializeFactoryForBinding(JavaWriter writer, ProvisionBinding binding,
       ImmutableBiMap<TypeElement, String> moduleNames,
       ImmutableBiMap<Key, String> providerNames,
-      ImmutableBiMap<Key, String> membersInjectorNames) {
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames) {
     if (binding.bindingKind().equals(COMPONENT)) {
       return String.format("InstanceFactory.<%s>create(this)",
           writer.compressType(Util.typeToString(binding.providedKey().type())));
@@ -317,7 +309,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   private static String initializeMembersInjectorForBinding(JavaWriter writer,
       MembersInjectionBinding binding,
       ImmutableBiMap<Key, String> providerNames,
-      ImmutableBiMap<Key, String> membersInjectorNames) {
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames) {
     List<String> parameters =
         getDependencyParameters(binding.dependencies(), providerNames, membersInjectorNames);
     return String.format("new %s(%s)",
@@ -327,7 +319,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
 
   private static List<String> getDependencyParameters(Iterable<DependencyRequest> dependencies,
       ImmutableBiMap<Key, String> providerNames,
-      ImmutableBiMap<Key, String> membersInjectorNames) {
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames) {
     ImmutableList.Builder<String> parameters = ImmutableList.builder();
     for (DependencyRequest dependency : dependencies) {
         parameters.add(dependency.kind().equals(MEMBERS_INJECTOR)
@@ -340,7 +332,7 @@ final class ComponentGenerator extends SourceFileGenerator<ComponentDescriptor> 
   private void writeInterfaceMethods(JavaWriter writer,
       ImmutableList<DependencyRequest> interfaceRequests,
       ImmutableBiMap<Key, String> providerNames,
-      ImmutableBiMap<Key, String> membersInjectorNames) throws IOException {
+      ImmutableBiMap<FrameworkKey, String> membersInjectorNames) throws IOException {
     for (DependencyRequest interfaceRequest : interfaceRequests) {
       ExecutableElement requestElement = (ExecutableElement) interfaceRequest.requestElement();
       beginMethodOverride(writer, requestElement);

@@ -17,6 +17,7 @@ package dagger.internal.codegen;
 
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.FluentIterable;
@@ -29,6 +30,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.SetMultimap;
 import com.squareup.javawriter.JavaWriter;
@@ -188,8 +190,14 @@ class SourceFiles {
   }
 
   // TODO(gak): this needs to suck less
-  static ImmutableBiMap<Key, String> generateProviderNamesForBindings(
-      SetMultimap<Key, ProvisionBinding> bindings) {
+  static ImmutableBiMap<Key, String> generateProviderNamesForBindings(ComponentDescriptor input) {
+    SetMultimap<FrameworkKey, Binding> bindings = Multimaps.filterKeys(input.bindings(),
+        new Predicate<FrameworkKey>() {
+          @Override public boolean apply(FrameworkKey key) {
+            return key.frameworkClass().equals(Provider.class);
+          }
+        });
+
     BiMap<Key, String> providerNames = HashBiMap.create(bindings.size());
     for (Entry<Key, Collection<ProvisionBinding>> entry : bindings.asMap().entrySet()) {
       Collection<ProvisionBinding> bindingsForKey = entry.getValue();
@@ -223,11 +231,27 @@ class SourceFiles {
     return ImmutableBiMap.copyOf(ImmutableSortedMap.copyOf(providerNames.inverse())).inverse();
   }
 
-  static ImmutableBiMap<Key, String> generateMembersInjectorNamesForBindings(
-      Map<Key, MembersInjectionBinding> bindings) {
+  static ImmutableBiMap<FrameworkKey, String> generateMembersInjectorNames(ComponentDescriptor input) {
+    SetMultimap<FrameworkKey, Binding> bindings = Multimaps.filterKeys(input.bindings(),
+        new Predicate<FrameworkKey>() {
+          @Override public boolean apply(FrameworkKey key) {
+            return key.frameworkClass().equals(MembersInjector.class);
+          }
+        });
+    BiMap<Key, String> membersInjectorNames = HashBiMap.create(bindings.size());
+    for (Entry<FrameworkKey, Collection<Binding>> entry : bindings.asMap().entrySet()) {
+      Collection<Binding> bindingsForKey = entry.getValue();
+      final String name;
+      Binding binding = Iterables.getOnlyElement(bindingsForKey);
+      membersInjectorNames.put(entry.getKey().key(),
+          CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL,
+                binding.typeElement().getSimpleName().toString()) + "MembersInjector");
+    }
+    return ImmutableBiMap.copyOf(membersInjectorNames);
+
     return ImmutableBiMap.copyOf(Maps.transformValues(bindings,
-        new Function<MembersInjectionBinding, String>() {
-          @Override public String apply(MembersInjectionBinding input) {
+        new Function<Binding, String>() {
+          @Override public String apply(Binding input) {
             return CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL,
                 input.typeElement().getSimpleName().toString()) + "MembersInjector";
           }
@@ -281,4 +305,8 @@ class SourceFiles {
   }
 
   private SourceFiles() {}
+
+}
+class Foo {
+
 }
