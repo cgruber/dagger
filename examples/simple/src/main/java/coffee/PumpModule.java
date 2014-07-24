@@ -11,7 +11,7 @@ class PumpModule {
     return pump;
   }
 
-  @Provides(type=SET) Flavor chocolate() {
+  @Provides(type=SET) @ForBeans Flavor chocolate() {
     return new Flavor("chocolate");
   }
 }

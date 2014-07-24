@@ -10,7 +10,7 @@ class CoffeeMaker {
   final Set<Flavor> beanFlavors;
   MilkSteamer steamer;
   @Inject CoffeeMaker(
-      Set<Flavor> beanFlavors,
+      @ForBeans Set<Flavor> beanFlavors,
       Lazy<Heater> heater,
       Pump pump,
       MilkSteamer steamer) {

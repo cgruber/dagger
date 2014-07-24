@@ -8,7 +8,8 @@ import static dagger.Provides.Type.SET;
 
 @Module(
     injects = CoffeeApp.class,
-    includes = PumpModule.class
+    includes = PumpModule.class,
+    library = true // Satisfy Dagger 1 constraint until we turn off the orphan analysis.
 )
 class DripCoffeeModule {
   @Provides @Singleton Heater provideHeater() {
