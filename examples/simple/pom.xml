@@ -46,22 +46,4 @@
     </dependency>
   </dependencies>
   
-  <build>
-    <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>default-compile</id>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <annotationProcessors>
-                <annotationProcessor>dagger.internal.codegen.ComponentProcessor</annotationProcessor>
-              </annotationProcessors>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
 </project>
