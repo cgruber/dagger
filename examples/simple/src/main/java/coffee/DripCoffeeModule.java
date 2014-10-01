@@ -9,4 +9,8 @@ class DripCoffeeModule {
   @Provides @Singleton Heater provideHeater() {
     return new ElectricHeater();
   }
+
+  @Provides String name() {
+    return "Awesome Maker";
+  }
 }
