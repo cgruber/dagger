@@ -18,8 +18,6 @@ package dagger.internal.codegen;
 import com.google.auto.common.MoreElements;
 import com.google.common.collect.ImmutableList;
 import dagger.Module;
-import dagger.producers.ProducerModule;
-import dagger.producers.ProductionComponent;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
@@ -28,6 +26,7 @@ import javax.lang.model.util.SimpleTypeVisitor6;
 
 import static com.google.auto.common.MoreElements.getAnnotationMirror;
 import static com.google.common.base.Preconditions.checkState;
+import static dagger.internal.codegen.ClassNames.getAnnotationMirror;
 import static dagger.internal.codegen.ConfigurationAnnotations.getComponentModules;
 import static javax.lang.model.element.ElementKind.CLASS;
 import static javax.lang.model.element.ElementKind.INTERFACE;
@@ -49,7 +48,7 @@ final class ProductionComponentValidator implements Validator<TypeElement> {
     }
 
     AnnotationMirror componentMirror =
-        getAnnotationMirror(subject, ProductionComponent.class).get();
+        getAnnotationMirror(subject, ClassNames.PRODUCTION_COMPONENT).get();
     ImmutableList<TypeMirror> moduleTypes = getComponentModules(componentMirror);
 
     // TODO(gak): make unused modules an error
@@ -66,7 +65,7 @@ final class ProductionComponentValidator implements Validator<TypeElement> {
           checkState(t.getTypeArguments().isEmpty());
           TypeElement moduleElement = MoreElements.asType(t.asElement());
           if (!getAnnotationMirror(moduleElement, Module.class).isPresent()
-              && !getAnnotationMirror(moduleElement, ProducerModule.class).isPresent()) {
+              && !getAnnotationMirror(moduleElement, ClassNames.PRODUCER_MODULE).isPresent()) {
             builder.addItem(moduleElement.getQualifiedName()
                 + " is listed as a module, but is not annotated with @Module or @ProducerModule",
                 subject);

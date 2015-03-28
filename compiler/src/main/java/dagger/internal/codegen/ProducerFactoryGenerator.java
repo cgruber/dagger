@@ -28,7 +28,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import dagger.Provides.Type;
+import dagger.internal.codegen.ContributionBinding.BindingType;
 import dagger.internal.codegen.writer.ClassName;
 import dagger.internal.codegen.writer.ClassWriter;
 import dagger.internal.codegen.writer.ConstructorWriter;
@@ -39,11 +39,6 @@ import dagger.internal.codegen.writer.ParameterizedTypeName;
 import dagger.internal.codegen.writer.Snippet;
 import dagger.internal.codegen.writer.TypeName;
 import dagger.internal.codegen.writer.TypeNames;
-import dagger.producers.Produced;
-import dagger.producers.Producer;
-import dagger.producers.Produces;
-import dagger.producers.internal.AbstractProducer;
-import dagger.producers.internal.Producers;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
@@ -91,7 +86,7 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
 
   @Override
   ImmutableSet<JavaWriter> write(ClassName generatedTypeName, ProductionBinding binding) {
-    TypeMirror keyType = binding.productionType().equals(Type.MAP)
+    TypeMirror keyType = binding.bindingType().equals(BindingType.MAP)
         ? Util.getProvidedValueTypeOfMap(MoreTypes.asDeclared(binding.key().type()))
         : binding.key().type();
     TypeName providedTypeName = TypeNames.forTypeMirror(keyType);
@@ -121,7 +116,7 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
     factoryWriter.addModifiers(PUBLIC);
     factoryWriter.addModifiers(FINAL);
     factoryWriter.setSuperType(
-        ParameterizedTypeName.create(AbstractProducer.class, providedTypeName));
+        ParameterizedTypeName.create(ClassNames.ABSTRACT_PRODUCER, providedTypeName));
 
     MethodWriter getMethodWriter = factoryWriter.addMethod(futureTypeName, "compute");
     getMethodWriter.annotate(Override.class);
@@ -162,7 +157,7 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
           name,
           dependency.kind().equals(DependencyRequest.Kind.PRODUCED)
               ? Snippet.format("%s.createFutureProduced(%s)",
-                  ClassName.fromClass(Producers.class), futureAccess)
+                  ClassNames.PRODUCERS, futureAccess)
               : futureAccess);
     }
 
@@ -192,7 +187,7 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
           ParameterizedTypeName.create(
               ClassName.fromClass(ListenableFuture.class),
               callableReturnType),
-          ClassName.fromClass(Producers.class),
+          ClassNames.PRODUCERS,
           callableSnippet);
       getMethodWriter.body().addSnippet("return %s;",
           returnsFuture
@@ -295,7 +290,7 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
       case INSTANCE:
         return keyName;
       case PRODUCED:
-        return ParameterizedTypeName.create(ClassName.fromClass(Produced.class), keyName);
+        return ParameterizedTypeName.create(ClassNames.PRODUCED, keyName);
       default:
         throw new AssertionError();
     }
@@ -341,10 +336,10 @@ final class ProducerFactoryGenerator extends SourceFileGenerator<ProductionBindi
           ClassName.fromClass(Futures.class),
           moduleSnippet);
     }
-    if (binding.productionType().equals(Produces.Type.SET)) {
+    if (binding.bindingType().equals(BindingType.SET)) {
       if (binding.bindingKind().equals(ProductionBinding.Kind.FUTURE_PRODUCTION)) {
         return Snippet.format("%s.createFutureSingletonSet(%s)",
-            ClassName.fromClass(Producers.class),
+            ClassNames.PRODUCERS,
             moduleSnippet);
       } else {
         return Snippet.format("%s.of(%s)",

@@ -139,7 +139,7 @@ class SourceFiles {
         : dependenciesByKeyMap.entrySet()) {
       BindingKey bindingKey = entry.getKey();
       Collection<DependencyRequest> requests = entry.getValue();
-      Class<?> frameworkClass =
+      ClassName frameworkClass =
           dependencyRequestMapper.getFrameworkClass(requests.iterator().next());
       // collect together all of the names that we would want to call the provider
       ImmutableSet<String> dependencyNames =

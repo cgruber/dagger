@@ -15,12 +15,10 @@
  */
 package dagger.internal.codegen;
 
-import com.google.auto.common.BasicAnnotationProcessor;
 import com.google.auto.common.MoreTypes;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.SetMultimap;
-import java.lang.annotation.Annotation;
 import java.util.Set;
 import javax.annotation.processing.Messager;
 import javax.inject.Inject;
@@ -64,18 +62,18 @@ final class InjectProcessingStep implements BasicAnnotationProcessor.ProcessingS
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.<Class<? extends Annotation>>of(Inject.class);
+  public Set<String> annotations() {
+    return ImmutableSet.of(ClassNames.INJECT.canonicalName());
   }
 
   @Override
-  public void process(SetMultimap<Class<? extends Annotation>, Element> elementsByAnnotation) {
+  public void process(SetMultimap<String, Element> elementsByAnnotation) {
     // TODO(gak): add some error handling for bad source files
     final ImmutableSet.Builder<ProvisionBinding> provisions = ImmutableSet.builder();
     // TODO(gak): instead, we should collect reports by type and check later
     final ImmutableSet.Builder<DeclaredType> membersInjectedTypes = ImmutableSet.builder();
 
-    for (Element injectElement : elementsByAnnotation.get(Inject.class)) {
+    for (Element injectElement : elementsByAnnotation.get(ClassNames.INJECT.canonicalName())) {
       injectElement.accept(
           new ElementKindVisitor6<Void, Void>() {
             @Override

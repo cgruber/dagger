@@ -27,8 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Sets;
 import dagger.Module;
-import dagger.producers.ProducerModule;
-import java.lang.annotation.Annotation;
+import dagger.internal.codegen.writer.ClassName;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map.Entry;
@@ -60,7 +59,7 @@ import static dagger.internal.codegen.ErrorMessages.REFERENCED_MODULE_NOT_ANNOTA
 import static javax.lang.model.element.Modifier.ABSTRACT;
 
 /**
- * A {@link Validator} for {@link Module}s or {@link ProducerModule}s.
+ * A {@link Validator} for {@link Module}s or {@link dagger.producers.ProducerModule}s.
  *
  * @author Gregory Kick
  * @since 2.0
@@ -68,20 +67,20 @@ import static javax.lang.model.element.Modifier.ABSTRACT;
 final class ModuleValidator implements Validator<TypeElement> {
   private final Types types;
   private final Elements elements;
-  private final Class<? extends Annotation> moduleClass;
-  private final Class<? extends Annotation> methodClass;
+  private final ClassName moduleClassName;
+  private final ClassName methodClassName;
   private final MethodSignatureFormatter methodSignatureFormatter;
 
   ModuleValidator(
       Types types,
       Elements elements,
       MethodSignatureFormatter methodSignatureFormatter,
-      Class<? extends Annotation> moduleClass,
-      Class<? extends Annotation> methodClass) {
+      ClassName moduleClassName,
+      ClassName methodClassName) {
     this.types = types;
     this.elements = elements;
-    this.moduleClass = moduleClass;
-    this.methodClass = methodClass;
+    this.moduleClassName = moduleClassName;
+    this.methodClassName = methodClassName;
     this.methodSignatureFormatter = methodSignatureFormatter;
   }
 
@@ -93,52 +92,53 @@ final class ModuleValidator implements Validator<TypeElement> {
     ListMultimap<String, ExecutableElement> allMethodsByName = ArrayListMultimap.create();
     ListMultimap<String, ExecutableElement> bindingMethodsByName = ArrayListMultimap.create();
     for (ExecutableElement moduleMethod : moduleMethods) {
-      if (isAnnotationPresent(moduleMethod, methodClass)) {
+      if (isAnnotationPresent(moduleMethod, methodClassName.canonicalName())) {
         bindingMethodsByName.put(moduleMethod.getSimpleName().toString(), moduleMethod);
       }
       allMethodsByName.put(moduleMethod.getSimpleName().toString(), moduleMethod);
     }
-      
+
     validateModuleVisibility(subject, builder);
     validateMethodsWithSameName(builder, bindingMethodsByName);
     validateProvidesOverrides(subject, builder, allMethodsByName, bindingMethodsByName);
-    validateModifiers(subject, builder);    
+    validateModifiers(subject, builder);
     validateReferencedModules(subject, builder);
-    
+
     // TODO(gak): port the dagger 1 module validation?
     return builder.build();
   }
 
   private void validateModifiers(TypeElement subject,
-      ValidationReport.Builder<TypeElement> builder) {    
+      ValidationReport.Builder<TypeElement> builder) {
     // This coupled with the check for abstract modules in ComponentValidator guarantees that
-    // only modules without type parameters are referenced from @Component(modules={...}). 
+    // only modules without type parameters are referenced from @Component(modules={...}).
     if (!subject.getTypeParameters().isEmpty() && !subject.getModifiers().contains(ABSTRACT)) {
       builder.addItem(MODULES_WITH_TYPE_PARAMS_MUST_BE_ABSTRACT, subject);
     }
   }
-  
+
   private void validateMethodsWithSameName(ValidationReport.Builder<TypeElement> builder,
       ListMultimap<String, ExecutableElement> bindingMethodsByName) {
     for (Entry<String, Collection<ExecutableElement>> entry :
         bindingMethodsByName.asMap().entrySet()) {
       if (entry.getValue().size() > 1) {
         for (ExecutableElement offendingMethod : entry.getValue()) {
-          builder.addItem(String.format(BINDING_METHOD_WITH_SAME_NAME, methodClass.getSimpleName()),
+          builder.addItem(
+              String.format(BINDING_METHOD_WITH_SAME_NAME, methodClassName.simpleName()),
               offendingMethod);
         }
       }
-    }    
+    }
   }
-  
+
   private void validateReferencedModules(final TypeElement subject,
       final ValidationReport.Builder<TypeElement> builder) {
     // Validate that all the modules we include are valid for inclusion.
-    AnnotationMirror mirror = getAnnotationMirror(subject, moduleClass).get();
+    AnnotationMirror mirror = getAnnotationMirror(subject, moduleClassName.canonicalName()).get();
     ImmutableList<TypeMirror> includedTypes = getModuleIncludes(mirror);
     validateReferencedModules(subject,  builder, includedTypes);
   }
-  
+
   /**
    * Used by {@link ModuleValidator} & {@link ComponentValidator} to validate referenced modules.
    */
@@ -155,14 +155,14 @@ final class ModuleValidator implements Validator<TypeElement> {
 
         @Override
         public Void visitDeclared(DeclaredType t, Void p) {
-          TypeElement element = MoreElements.asType(t.asElement()); 
+          TypeElement element = MoreElements.asType(t.asElement());
           if (!t.getTypeArguments().isEmpty()) {
             builder.addItem(String.format(REFERENCED_MODULE_MUST_NOT_HAVE_TYPE_PARAMS,
                 element.getQualifiedName()), subject);
           }
-          if (!getAnnotationMirror(element, moduleClass).isPresent()) {
+          if (!isAnnotationPresent(element, moduleClassName.canonicalName())) {
             builder.addItem(String.format(REFERENCED_MODULE_NOT_ANNOTATED,
-                element.getQualifiedName(), moduleClass.getSimpleName()), subject);
+                element.getQualifiedName(), moduleClassName.simpleName()), subject);
           }
           if (element.getModifiers().contains(ABSTRACT)) {
             builder.addItem(String.format(REFERENCED_MODULES_MUST_NOT_BE_ABSTRACT,
@@ -173,11 +173,11 @@ final class ModuleValidator implements Validator<TypeElement> {
       }, null);
     }
   }
-  
+
   private void validateProvidesOverrides(TypeElement subject,
       ValidationReport.Builder<TypeElement> builder,
       ListMultimap<String, ExecutableElement> allMethodsByName,
-      ListMultimap<String, ExecutableElement> bindingMethodsByName) { 
+      ListMultimap<String, ExecutableElement> bindingMethodsByName) {
     // For every @Provides method, confirm it overrides nothing *and* nothing overrides it.
     // Consider the following hierarchy:
     // class Parent {
@@ -209,18 +209,18 @@ final class ModuleValidator implements Validator<TypeElement> {
               && elements.overrides(providesMethod, superclassMethod, subject)) {
             failedMethods.add(providesMethod);
             builder.addItem(String.format(PROVIDES_METHOD_OVERRIDES_ANOTHER,
-                methodClass.getSimpleName(), methodSignatureFormatter.format(superclassMethod)),
+                methodClassName.simpleName(), methodSignatureFormatter.format(superclassMethod)),
                 providesMethod);
           }
         }
         // For each @Provides method in superclass, confirm our methods don't override it.
-        if (isAnnotationPresent(superclassMethod, methodClass)) {
+        if (isAnnotationPresent(superclassMethod, methodClassName.canonicalName())) {
           for (ExecutableElement method : allMethodsByName.get(name)) {
             if (!failedMethods.contains(method)
                 && elements.overrides(method, superclassMethod, subject)) {
               failedMethods.add(method);
               builder.addItem(String.format(METHOD_OVERRIDES_PROVIDES_METHOD,
-                  methodClass.getSimpleName(), methodSignatureFormatter.format(superclassMethod)),
+                  methodClassName.simpleName(), methodSignatureFormatter.format(superclassMethod)),
                   method);
             }
           }
@@ -248,7 +248,7 @@ final class ModuleValidator implements Validator<TypeElement> {
       case TOP_LEVEL:
         if (moduleVisibility.equals(PUBLIC)) {
           ImmutableSet<Element> nonPublicModules = FluentIterable.from(getModuleIncludes(
-              getAnnotationMirror(moduleElement, moduleClass).get()))
+              getAnnotationMirror(moduleElement, moduleClassName.canonicalName()).get()))
                   .transform(new Function<TypeMirror, Element>() {
                     @Override public Element apply(TypeMirror input) {
                       return types.asElement(input);

@@ -24,8 +24,8 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import dagger.Provides;
+import dagger.internal.codegen.writer.ClassName;
 import javax.inject.Inject;
-import javax.inject.Provider;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -129,8 +129,8 @@ abstract class ProvisionBinding extends ContributionBinding {
   }
 
   @Override
-  Class<?> frameworkClass() {
-    return Provider.class;
+  ClassName frameworkClass() {
+    return ClassNames.PROVIDER;
   }
 
   enum FactoryCreationStrategy {

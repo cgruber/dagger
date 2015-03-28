@@ -103,29 +103,29 @@ public class DependencyRequestMapperTest {
   @Test public void forProvider() {
     DependencyRequestMapper mapper = DependencyRequestMapper.FOR_PROVIDER;
     assertThat(mapper.getFrameworkClass(dependencyRequestForInstance()))
-        .isEqualTo(Provider.class);
+        .isEqualTo(ClassNames.PROVIDER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForLazy()))
-        .isEqualTo(Provider.class);
+        .isEqualTo(ClassNames.PROVIDER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForProvider()))
-        .isEqualTo(Provider.class);
+        .isEqualTo(ClassNames.PROVIDER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForMembersInjector()))
-        .isEqualTo(MembersInjector.class);
+        .isEqualTo(ClassNames.MEMBERS_INJECTOR);
   }
 
   @Test public void forProducer() {
     DependencyRequestMapper mapper = DependencyRequestMapper.FOR_PRODUCER;
     assertThat(mapper.getFrameworkClass(dependencyRequestForInstance()))
-        .isEqualTo(Producer.class);
+        .isEqualTo(ClassNames.PRODUCER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForLazy()))
-        .isEqualTo(Provider.class);
+        .isEqualTo(ClassNames.PROVIDER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForProvider()))
-        .isEqualTo(Provider.class);
+        .isEqualTo(ClassNames.PROVIDER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForMembersInjector()))
-        .isEqualTo(MembersInjector.class);
+        .isEqualTo(ClassNames.MEMBERS_INJECTOR);
     assertThat(mapper.getFrameworkClass(dependencyRequestForProducer()))
-        .isEqualTo(Producer.class);
+        .isEqualTo(ClassNames.PRODUCER);
     assertThat(mapper.getFrameworkClass(dependencyRequestForProduced()))
-        .isEqualTo(Producer.class);
+        .isEqualTo(ClassNames.PRODUCER);
   }
 
   @Module(library = true)

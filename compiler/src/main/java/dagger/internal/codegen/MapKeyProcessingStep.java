@@ -15,11 +15,9 @@
  */
 package dagger.internal.codegen;
 
-import com.google.auto.common.BasicAnnotationProcessor;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.SetMultimap;
 import dagger.MapKey;
-import java.lang.annotation.Annotation;
 import java.util.Set;
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
@@ -44,13 +42,13 @@ public class MapKeyProcessingStep implements BasicAnnotationProcessor.Processing
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.<Class<? extends Annotation>>of(MapKey.class);
+  public Set<String> annotations() {
+    return ImmutableSet.of(ClassNames.MAP_KEY.canonicalName());
   }
 
   @Override
-  public void process(SetMultimap<Class<? extends Annotation>, Element> elementsByAnnotation) {
-    for (Element element : elementsByAnnotation.get(MapKey.class)) {
+  public void process(SetMultimap<String, Element> elementsByAnnotation) {
+    for (Element element : elementsByAnnotation.get(ClassNames.MAP_KEY.canonicalName())) {
       ValidationReport<Element> mapKeyReport = mapKeyValidator.validate(element);
       mapKeyReport.printMessagesTo(messager);
 

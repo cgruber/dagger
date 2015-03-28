@@ -35,17 +35,17 @@ abstract class FrameworkField {
   // methods
 
   static FrameworkField createWithTypeFromKey(
-      Class<?> frameworkClass, BindingKey bindingKey, String name) {
-    String suffix = frameworkClass.getSimpleName();
+      ClassName frameworkClassName, BindingKey bindingKey, String name) {
+    String suffix = frameworkClassName.simpleName();
     ParameterizedTypeName frameworkType = ParameterizedTypeName.create(
-        ClassName.fromClass(frameworkClass),
+        frameworkClassName,
         TypeNames.forTypeMirror(bindingKey.key().type()));
-    return new AutoValue_FrameworkField(frameworkClass, frameworkType, bindingKey,
+    return new AutoValue_FrameworkField(frameworkClassName, frameworkType, bindingKey,
         name.endsWith(suffix) ? name : name + suffix);
   }
 
   static FrameworkField createForMapBindingContribution(
-      Class<?> frameworkClass, BindingKey bindingKey, String name) {
+      ClassName frameworkClass, BindingKey bindingKey, String name) {
     TypeMirror mapValueType =
         MoreTypes.asDeclared(bindingKey.key().type()).getTypeArguments().get(1);
     return new AutoValue_FrameworkField(frameworkClass,
@@ -54,7 +54,10 @@ abstract class FrameworkField {
         name);
   }
 
-  abstract Class<?> frameworkClass();
+  // TODO(cgruber): Determine if we even need frameworkClass now that it's not sporting a Class<?>
+  /** The raw framework class */
+  abstract ClassName frameworkClass();
+  /** The fully parameterized type of the field */
   abstract TypeName frameworkType();
   abstract BindingKey bindingKey();
   abstract String name();

@@ -15,7 +15,6 @@
  */
 package dagger.internal.codegen;
 
-import com.google.auto.common.BasicAnnotationProcessor;
 import com.google.auto.common.MoreElements;
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
@@ -24,7 +23,6 @@ import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import dagger.Module;
 import dagger.Provides;
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.processing.Messager;
@@ -65,15 +63,15 @@ final class ModuleProcessingStep implements BasicAnnotationProcessor.ProcessingS
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.of(Module.class, Provides.class);
+  public Set<String> annotations() {
+    return ImmutableSet.of(ClassNames.MODULE.canonicalName(), ClassNames.PROVIDES.canonicalName());
   }
 
   @Override
-  public void process(SetMultimap<Class<? extends Annotation>, Element> elementsByAnnotation) {
+  public void process(SetMultimap<String, Element> elementsByAnnotation) {
     // first, check and collect all provides methods
     ImmutableSet.Builder<ExecutableElement> validProvidesMethodsBuilder = ImmutableSet.builder();
-    for (Element providesElement : elementsByAnnotation.get(Provides.class)) {
+    for (Element providesElement : elementsByAnnotation.get(ClassNames.PROVIDES.canonicalName())) {
       if (providesElement.getKind().equals(METHOD)) {
         ExecutableElement providesMethodElement = (ExecutableElement) providesElement;
         ValidationReport<ExecutableElement> methodReport =
@@ -88,7 +86,8 @@ final class ModuleProcessingStep implements BasicAnnotationProcessor.ProcessingS
 
     // process each module
     for (Element moduleElement :
-        Sets.difference(elementsByAnnotation.get(Module.class), processedModuleElements)) {
+        Sets.difference(elementsByAnnotation.get(ClassNames.MODULE.canonicalName()),
+            processedModuleElements)) {
       ValidationReport<TypeElement> report =
           moduleValidator.validate(MoreElements.asType(moduleElement));
       report.printMessagesTo(messager);

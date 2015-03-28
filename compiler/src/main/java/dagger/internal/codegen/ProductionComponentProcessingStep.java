@@ -15,12 +15,9 @@
  */
 package dagger.internal.codegen;
 
-import com.google.auto.common.BasicAnnotationProcessor.ProcessingStep;
 import com.google.auto.common.MoreElements;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.SetMultimap;
-import dagger.producers.ProductionComponent;
-import java.lang.annotation.Annotation;
 import java.util.Set;
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
@@ -32,7 +29,7 @@ import javax.lang.model.element.TypeElement;
  *
  * @author Jesse Beder
  */
-final class ProductionComponentProcessingStep implements ProcessingStep {
+final class ProductionComponentProcessingStep implements BasicAnnotationProcessor.ProcessingStep {
   private final Messager messager;
   private final ProductionComponentValidator componentValidator;
   private final BindingGraphValidator bindingGraphValidator;
@@ -56,13 +53,14 @@ final class ProductionComponentProcessingStep implements ProcessingStep {
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.<Class<? extends Annotation>>of(ProductionComponent.class);
+  public Set<String> annotations() {
+    return ImmutableSet.of(ClassNames.PRODUCTION_COMPONENT.canonicalName());
   }
 
   @Override
-  public void process(SetMultimap<Class<? extends Annotation>, Element> elementsByAnnotation) {
-    Set<? extends Element> componentElements = elementsByAnnotation.get(ProductionComponent.class);
+  public void process(SetMultimap<String, Element> elementsByAnnotation) {
+    Set<? extends Element> componentElements =
+        elementsByAnnotation.get(ClassNames.PRODUCTION_COMPONENT.canonicalName());
 
     for (Element element : componentElements) {
       TypeElement componentTypeElement = MoreElements.asType(element);

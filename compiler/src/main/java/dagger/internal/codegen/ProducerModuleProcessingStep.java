@@ -15,7 +15,6 @@
  */
 package dagger.internal.codegen;
 
-import com.google.auto.common.BasicAnnotationProcessor.ProcessingStep;
 import com.google.auto.common.MoreElements;
 import com.google.auto.common.SuperficialValidation;
 import com.google.common.base.Function;
@@ -23,9 +22,6 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
-import dagger.producers.ProducerModule;
-import dagger.producers.Produces;
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.processing.Messager;
@@ -34,7 +30,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 
-import static com.google.auto.common.MoreElements.isAnnotationPresent;
+import static dagger.internal.codegen.ClassNames.isAnnotationPresent;
 import static javax.lang.model.element.ElementKind.METHOD;
 
 /**
@@ -44,7 +40,7 @@ import static javax.lang.model.element.ElementKind.METHOD;
  * @author Jesse Beder
  * @since 2.0
  */
-final class ProducerModuleProcessingStep implements ProcessingStep {
+final class ProducerModuleProcessingStep implements BasicAnnotationProcessor.ProcessingStep {
   private final Messager messager;
   private final ModuleValidator moduleValidator;
   private final ProducesMethodValidator producesMethodValidator;
@@ -66,15 +62,17 @@ final class ProducerModuleProcessingStep implements ProcessingStep {
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.of(Produces.class, ProducerModule.class);
+  public Set<String> annotations() {
+    return ImmutableSet.of(
+        ClassNames.PRODUCES.canonicalName(),
+        ClassNames.PRODUCER_MODULE.canonicalName());
   }
 
   @Override
-  public void process(SetMultimap<Class<? extends Annotation>, Element> elementsByAnnotation) {
+  public void process(SetMultimap<String, Element> elementsByAnnotation) {
     // first, check and collect all produces methods
     ImmutableSet.Builder<ExecutableElement> validProducesMethodsBuilder = ImmutableSet.builder();
-    for (Element producesElement : elementsByAnnotation.get(Produces.class)) {
+    for (Element producesElement : elementsByAnnotation.get(ClassNames.PRODUCES.canonicalName())) {
       if (producesElement.getKind().equals(METHOD)) {
         ExecutableElement producesMethodElement = (ExecutableElement) producesElement;
         ValidationReport<ExecutableElement> methodReport =
@@ -89,7 +87,7 @@ final class ProducerModuleProcessingStep implements ProcessingStep {
 
     // process each module
     for (Element moduleElement :
-        Sets.difference(elementsByAnnotation.get(ProducerModule.class),
+        Sets.difference(elementsByAnnotation.get(ClassNames.PRODUCER_MODULE.canonicalName()),
             processedModuleElements)) {
       if (SuperficialValidation.validateElement(moduleElement)) {
         ValidationReport<TypeElement> report =
@@ -102,7 +100,7 @@ final class ProducerModuleProcessingStep implements ProcessingStep {
           List<ExecutableElement> moduleMethods =
               ElementFilter.methodsIn(moduleElement.getEnclosedElements());
           for (ExecutableElement methodElement : moduleMethods) {
-            if (isAnnotationPresent(methodElement, Produces.class)) {
+            if (isAnnotationPresent(methodElement, ClassNames.PRODUCES)) {
               moduleProducesMethodsBuilder.add(methodElement);
             }
           }

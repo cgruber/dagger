@@ -21,8 +21,8 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
-import dagger.producers.Producer;
-import dagger.producers.Produces;
+import dagger.internal.codegen.writer.ClassName;
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
@@ -31,6 +31,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
 
+import static com.google.auto.common.AnnotationMirrors.getAnnotationValue;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static javax.lang.model.element.ElementKind.METHOD;
@@ -72,26 +73,8 @@ abstract class ProductionBinding extends ContributionBinding {
    */
   abstract Kind bindingKind();
 
-  /** Returns provision type that was used to bind the key. */
-  abstract Produces.Type productionType();
-
   /** Returns the list of types in the throws clause of the method. */
   abstract ImmutableList<? extends TypeMirror> thrownTypes();
-
-  @Override
-  BindingType bindingType() {
-    switch (productionType()) {
-      case SET:
-      case SET_VALUES:
-        return BindingType.SET;
-      case MAP:
-        return BindingType.MAP;
-      case UNIQUE:
-        return BindingType.UNIQUE;
-      default:
-        throw new IllegalStateException("Unknown production type: " + productionType());
-    }
-  }
 
   @Override
   boolean isSyntheticBinding() {
@@ -99,8 +82,8 @@ abstract class ProductionBinding extends ContributionBinding {
   }
 
   @Override
-  Class<?> frameworkClass() {
-    return Producer.class;
+  ClassName frameworkClass() {
+    return ClassNames.PRODUCER;
   }
 
   static final class Factory {
@@ -122,8 +105,9 @@ abstract class ProductionBinding extends ContributionBinding {
       checkNotNull(producesMethod);
       checkArgument(producesMethod.getKind().equals(METHOD));
       checkArgument(contributedBy.getKind().equals(TypeKind.DECLARED));
-      Produces producesAnnotation = producesMethod.getAnnotation(Produces.class);
-      checkArgument(producesAnnotation != null);
+      Optional<AnnotationMirror> producesAnnotation =
+          ClassNames.getAnnotationMirror(producesMethod, ClassNames.PRODUCES);
+      checkArgument(producesAnnotation.isPresent());
       DeclaredType declaredContainer = MoreTypes.asDeclared(contributedBy);
       ExecutableType resolvedMethod =
           MoreTypes.asExecutable(types.asMemberOf(declaredContainer, producesMethod));
@@ -136,16 +120,17 @@ abstract class ProductionBinding extends ContributionBinding {
       Kind kind = MoreTypes.isTypeOf(ListenableFuture.class, producesMethod.getReturnType())
           ? Kind.FUTURE_PRODUCTION
           : Kind.IMMEDIATE;
+
       return new AutoValue_ProductionBinding(
           key,
           producesMethod,
           dependencies,
           findBindingPackage(key),
           false,
+          BindingType.forEnumAnnotationValue(getAnnotationValue(producesAnnotation.get(), "type")),
           ConfigurationAnnotations.getNullableType(producesMethod),
           Optional.of(MoreTypes.asTypeElement(declaredContainer)),
           kind,
-          producesAnnotation.type(),
           ImmutableList.copyOf(producesMethod.getThrownTypes()));
     }
 
@@ -160,10 +145,10 @@ abstract class ProductionBinding extends ContributionBinding {
           dependencies,
           findBindingPackage(explicitRequest.key()),
           false,
+          BindingType.MAP,
           Optional.<DeclaredType>absent(),
           Optional.<TypeElement>absent(),
           Kind.SYNTHETIC_PRODUCTION,
-          Produces.Type.MAP,
           ImmutableList.<TypeMirror>of());
     }
 
@@ -178,10 +163,10 @@ abstract class ProductionBinding extends ContributionBinding {
           ImmutableSet.<DependencyRequest>of(),
           Optional.<String>absent(),
           false,
+          BindingType.UNIQUE,
           Optional.<DeclaredType>absent(),
           Optional.<TypeElement>absent(),
           Kind.COMPONENT_PRODUCTION,
-          Produces.Type.UNIQUE,
           ImmutableList.copyOf(componentMethod.getThrownTypes()));
     }
   }

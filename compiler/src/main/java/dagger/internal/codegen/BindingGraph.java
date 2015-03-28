@@ -30,8 +30,6 @@ import com.google.common.collect.Sets;
 import dagger.Component;
 import dagger.Provides;
 import dagger.internal.codegen.ComponentDescriptor.ComponentMethodType;
-import dagger.producers.Produces;
-import dagger.producers.ProductionComponent;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -163,7 +161,8 @@ abstract class BindingGraph {
       // Collect Component dependencies.
       Optional<AnnotationMirror> componentMirror =
           getAnnotationMirror(componentDefinitionType, Component.class)
-              .or(getAnnotationMirror(componentDefinitionType, ProductionComponent.class));
+              .or(getAnnotationMirror(componentDefinitionType,
+                  ClassNames.PRODUCTION_COMPONENT.canonicalName()));
       ImmutableSet<TypeElement> componentDependencyTypes = componentMirror.isPresent()
           ? MoreTypes.asTypeElements(getComponentDependencies(componentMirror.get()))
           : ImmutableSet.<TypeElement>of();
@@ -201,7 +200,7 @@ abstract class BindingGraph {
             explicitProvisionBindingsBuilder.add(
                 provisionBindingFactory.forProvidesMethod(moduleMethod, module.asType()));
           }
-          if (isAnnotationPresent(moduleMethod, Produces.class)) {
+          if (isAnnotationPresent(moduleMethod, ClassNames.PRODUCES.canonicalName())) {
             explicitProductionBindingsBuilder.add(
                 productionBindingFactory.forProducesMethod(moduleMethod, module.asType()));
            }

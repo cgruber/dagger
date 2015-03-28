@@ -28,8 +28,6 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import dagger.Component;
 import dagger.Subcomponent;
-import dagger.producers.ProductionComponent;
-import java.lang.annotation.Annotation;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -63,17 +61,17 @@ abstract class ComponentDescriptor {
   ComponentDescriptor() {}
 
   enum Kind {
-    COMPONENT(Component.class),
-    PRODUCTION_COMPONENT(ProductionComponent.class);
+    COMPONENT(Component.class.getCanonicalName()),
+    PRODUCTION_COMPONENT(ClassNames.PRODUCTION_COMPONENT.canonicalName());
 
-    private final Class<? extends Annotation> annotationType;
+    private final String annotationTypeName;
 
-    Kind(Class<? extends Annotation> annotationType) {
-      this.annotationType = annotationType;
+    Kind(String annotationTypeName) {
+      this.annotationTypeName = annotationTypeName;
     }
 
-    Class<? extends Annotation> annotationType() {
-      return annotationType;
+    String annotationTypeName() {
+      return annotationTypeName;
     }
   }
 
@@ -146,7 +144,7 @@ abstract class ComponentDescriptor {
 
     private ComponentDescriptor create(TypeElement componentDefinitionType, Kind kind) {
       AnnotationMirror componentMirror =
-          getAnnotationMirror(componentDefinitionType, kind.annotationType())
+          getAnnotationMirror(componentDefinitionType, kind.annotationTypeName())
               .or(getAnnotationMirror(componentDefinitionType, Subcomponent.class))
               .get();
       ImmutableSet<TypeElement> componentDependencyTypes =

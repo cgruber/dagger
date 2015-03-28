@@ -18,8 +18,7 @@ package dagger.internal.codegen;
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableSet;
-import dagger.MembersInjector;
-import dagger.producers.Producer;
+import dagger.internal.codegen.writer.ClassName;
 import javax.inject.Provider;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -32,38 +31,38 @@ import static com.google.common.collect.Iterables.getOnlyElement;
  *  @since 2.0
  */
 abstract class DependencyRequestMapper {
-  abstract Class<?> getFrameworkClass(DependencyRequest request);
+  abstract ClassName getFrameworkClass(DependencyRequest request);
 
   /**
    * Returns the framework class to use for a collection of requests of the same {@link BindingKey}.
    * This allows factories to only take a single argument for multiple requests of the same key.
    */
-  Class<?> getFrameworkClass(Iterable<DependencyRequest> requests) {
-    ImmutableSet<Class<?>> classes = FluentIterable.from(requests)
-        .transform(new Function<DependencyRequest, Class<?>>() {
-          @Override public Class<?> apply(DependencyRequest request) {
+  ClassName getFrameworkClass(Iterable<DependencyRequest> requests) {
+    ImmutableSet<ClassName> classes = FluentIterable.from(requests)
+        .transform(new Function<DependencyRequest, ClassName>() {
+          @Override public ClassName apply(DependencyRequest request) {
             return getFrameworkClass(request);
           }
         })
         .toSet();
     if (classes.size() == 1) {
       return getOnlyElement(classes);
-    } else if (classes.equals(ImmutableSet.of(Producer.class, Provider.class))) {
-      return Provider.class;
+    } else if (classes.equals(ImmutableSet.of(ClassNames.PRODUCER, ClassNames.PROVIDER))) {
+      return ClassNames.PROVIDER;
     } else {
       throw new IllegalStateException("Bad set of framework classes: " + classes);
     }
   }
 
   private static final class MapperForProvider extends DependencyRequestMapper {
-    @Override public Class<?> getFrameworkClass(DependencyRequest request) {
+    @Override public ClassName getFrameworkClass(DependencyRequest request) {
       switch (request.kind()) {
         case INSTANCE:
         case PROVIDER:
         case LAZY:
-          return Provider.class;
+          return ClassNames.PROVIDER;
         case MEMBERS_INJECTOR:
-          return MembersInjector.class;
+          return ClassNames.MEMBERS_INJECTOR;
         case PRODUCED:
         case PRODUCER:
           throw new IllegalArgumentException();
@@ -76,17 +75,17 @@ abstract class DependencyRequestMapper {
   static final DependencyRequestMapper FOR_PROVIDER = new MapperForProvider();
 
   private static final class MapperForProducer extends DependencyRequestMapper {
-    @Override public Class<?> getFrameworkClass(DependencyRequest request) {
+    @Override public ClassName getFrameworkClass(DependencyRequest request) {
       switch (request.kind()) {
         case INSTANCE:
         case PRODUCED:
         case PRODUCER:
-          return Producer.class;
+          return ClassNames.PRODUCER;
         case PROVIDER:
         case LAZY:
-          return Provider.class;
+          return ClassNames.PROVIDER;
         case MEMBERS_INJECTOR:
-          return MembersInjector.class;
+          return ClassNames.MEMBERS_INJECTOR;
         default:
           throw new AssertionError();
       }

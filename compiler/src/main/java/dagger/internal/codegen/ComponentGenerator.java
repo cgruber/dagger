@@ -59,9 +59,6 @@ import dagger.internal.codegen.writer.TypeName;
 import dagger.internal.codegen.writer.TypeNames;
 import dagger.internal.codegen.writer.TypeWriter;
 import dagger.internal.codegen.writer.VoidName;
-import dagger.producers.Producer;
-import dagger.producers.internal.Producers;
-import dagger.producers.internal.SetProducer;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -743,7 +740,7 @@ final class ComponentGenerator extends SourceFileGenerator<BindingGraph> {
                 Snippet initializeSetSnippet = Snippet.format("%s.create(%s)",
                     hasOnlyProvisions
                         ? ClassName.fromClass(SetFactory.class)
-                        : ClassName.fromClass(SetProducer.class),
+                        : ClassNames.SET_PRODUCER,
                     Snippet.makeParametersSnippet(parameterSnippets.build()));
                 initializeMethod.body().addSnippet("this.%s = %s;",
                     memberSelectSnippet, initializeSetSnippet);
@@ -852,17 +849,17 @@ final class ComponentGenerator extends SourceFileGenerator<BindingGraph> {
     }
   }
 
-  private static Class<?> frameworkClassForResolvedBindings(ResolvedBindings resolvedBindings) {
+  private static ClassName frameworkClassForResolvedBindings(ResolvedBindings resolvedBindings) {
     switch (resolvedBindings.bindingKey().kind()) {
       case CONTRIBUTION:
         for (ContributionBinding binding : resolvedBindings.contributionBindings()) {
           if (binding instanceof ProductionBinding) {
-            return Producer.class;
+            return ClassNames.PRODUCER;
           }
         }
-        return Provider.class;
+        return ClassNames.PROVIDER;
       case MEMBERS_INJECTION:
-        return MembersInjector.class;
+        return ClassNames.MEMBERS_INJECTOR;
       default:
         throw new AssertionError();
     }
@@ -909,7 +906,7 @@ final class ComponentGenerator extends SourceFileGenerator<BindingGraph> {
         }
       case MEMBERS_INJECTION:
         return FrameworkField.createWithTypeFromKey(
-            MembersInjector.class,
+            ClassNames.MEMBERS_INJECTOR,
             bindingKey,
             CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL,
                 Iterables.getOnlyElement(resolvedBindings.bindings())
@@ -1036,7 +1033,7 @@ final class ComponentGenerator extends SourceFileGenerator<BindingGraph> {
             "    return %4$s.%5$s();",
             "  }",
             "}"),
-            ClassName.fromClass(Producer.class),
+            ClassNames.PRODUCER,
             TypeNames.forTypeMirror(binding.key().type()),
             ClassName.fromClass(ListenableFuture.class),
             contributionFields.get(dependencyMethodIndex.get(binding.bindingElement()))
@@ -1123,13 +1120,13 @@ final class ComponentGenerator extends SourceFileGenerator<BindingGraph> {
             }
           }));
       ResolvedBindings resolvedBindings = bindingGraph.resolvedBindings().get(key);
-      Class<?> frameworkClass =
+      ClassName frameworkClassName =
           DependencyRequestMapper.FOR_PRODUCER.getFrameworkClass(requestsForKey);
-      if (frameworkClassForResolvedBindings(resolvedBindings).equals(Provider.class)
-          && frameworkClass.equals(Producer.class)) {
+      if (frameworkClassForResolvedBindings(resolvedBindings).equals(ClassNames.PROVIDER)
+          && frameworkClassName.equals(ClassNames.PRODUCER)) {
         parameters.add(Snippet.format(
             "%s.producerFromProvider(%s)",
-            ClassName.fromClass(Producers.class),
+            ClassNames.PRODUCERS,
             memberSelectSnippets.get(key).getSnippetFor(componentName)));
       } else {
         parameters.add(memberSelectSnippets.get(key).getSnippetFor(componentName));

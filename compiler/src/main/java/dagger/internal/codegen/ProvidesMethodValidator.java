@@ -15,20 +15,25 @@
  */
 package dagger.internal.codegen;
 
+import com.google.auto.common.AnnotationMirrors;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import dagger.Module;
 import dagger.Provides;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
+import javax.lang.model.util.SimpleAnnotationValueVisitor6;
 
 import static com.google.auto.common.MoreElements.isAnnotationPresent;
 import static com.google.common.base.Preconditions.checkArgument;
@@ -73,19 +78,21 @@ final class ProvidesMethodValidator implements Validator<ExecutableElement> {
   }
 
   @Override
-  public ValidationReport<ExecutableElement> validate(ExecutableElement providesMethodElement) {
-    ValidationReport.Builder<ExecutableElement> builder =
+  public ValidationReport<ExecutableElement> validate(
+      final ExecutableElement providesMethodElement) {
+    final ValidationReport.Builder<ExecutableElement> builder =
         ValidationReport.Builder.about(providesMethodElement);
 
-    Provides providesAnnotation = providesMethodElement.getAnnotation(Provides.class);
-    checkArgument(providesAnnotation != null);
+    final Optional<AnnotationMirror> providesAnnotation =
+        ClassNames.getAnnotationMirror(providesMethodElement, ClassNames.PROVIDES);
+    checkArgument(providesAnnotation.isPresent());
 
     Element enclosingElement = providesMethodElement.getEnclosingElement();
     if (!isAnnotationPresent(enclosingElement, Module.class)) {
       builder.addItem(formatModuleErrorMessage(BINDING_METHOD_NOT_IN_MODULE),
           providesMethodElement);
     }
-    
+
     if (!providesMethodElement.getTypeParameters().isEmpty()) {
       builder.addItem(formatErrorMessage(BINDING_METHOD_TYPE_PARAMETER),
           providesMethodElement);
@@ -104,65 +111,67 @@ final class ProvidesMethodValidator implements Validator<ExecutableElement> {
       builder.addItem(formatErrorMessage(BINDING_METHOD_ABSTRACT), providesMethodElement);
     }
 
-    TypeMirror returnType = providesMethodElement.getReturnType();
+    final TypeMirror returnType = providesMethodElement.getReturnType();
     TypeKind returnTypeKind = returnType.getKind();
     if (returnTypeKind.equals(VOID)) {
       builder.addItem(formatErrorMessage(BINDING_METHOD_MUST_RETURN_A_VALUE),
           providesMethodElement);
     }
-  
-    // check mapkey is right
-    if (!providesAnnotation.type().equals(Provides.Type.MAP) 
-        && (getMapKeys(providesMethodElement) != null
-            && getMapKeys(providesMethodElement).size() > 0)) {
-      builder.addItem(formatErrorMessage(BINDING_METHOD_NOT_MAP_HAS_MAP_KEY),
-          providesMethodElement);
-    }
 
     validateMethodQualifiers(builder, providesMethodElement);
 
-    switch (providesAnnotation.type()) {
-      case UNIQUE: // fall through
-      case SET:
-        validateKeyType(builder, returnType);
-        break;
-      case MAP:
-        validateKeyType(builder, returnType);
-        ImmutableSet<? extends AnnotationMirror> annotationMirrors =
-            getMapKeys(providesMethodElement);
-        switch (annotationMirrors.size()) {
-          case 0:
-            builder.addItem(formatErrorMessage(BINDING_METHOD_WITH_NO_MAP_KEY),
-                providesMethodElement);
-            break;
-          case 1:
-            break;
-          default:
-            builder.addItem(formatErrorMessage(BINDING_METHOD_WITH_MULTIPLE_MAP_KEY),
-                providesMethodElement);
-            break;
+    AnnotationValue type = AnnotationMirrors.getAnnotationValue(providesAnnotation.get(), "type");
+    type.accept(new SimpleAnnotationValueVisitor6<Void, Void>() {
+      @Override public Void visitEnumConstant(VariableElement enumValue, Void p) {
+        String enumValueName = enumValue.getSimpleName().toString();
+        // check mapkey is right
+        boolean hasMapKeys = !getMapKeys(providesMethodElement).isEmpty();
+        if (hasMapKeys && !enumValueName.equals("MAP")) {
+           builder.addItem(
+               formatErrorMessage(BINDING_METHOD_NOT_MAP_HAS_MAP_KEY), providesMethodElement);
         }
-        break;
-      case SET_VALUES:
-        if (!returnTypeKind.equals(DECLARED)) {
-          builder.addItem(PROVIDES_METHOD_SET_VALUES_RETURN_SET, providesMethodElement);
-        } else {
-          DeclaredType declaredReturnType = (DeclaredType) returnType;
-          // TODO(gak): should we allow "covariant return" for set values?
-          if (!declaredReturnType.asElement().equals(getSetElement())) {
+        if (enumValueName.equals("UNIQUE")) {
+          validateKeyType(builder, returnType);
+        } else if (enumValueName.equals("SET")) {
+          validateKeyType(builder, returnType);
+        } else if (enumValueName.equals("SET_VALUES")) {
+          if (!returnType.getKind().equals(DECLARED)) {
             builder.addItem(PROVIDES_METHOD_SET_VALUES_RETURN_SET, providesMethodElement);
-          } else if (declaredReturnType.getTypeArguments().isEmpty()) {
-            builder.addItem(formatErrorMessage(BINDING_METHOD_SET_VALUES_RAW_SET),
-                providesMethodElement);
           } else {
-            validateKeyType(builder,
-                Iterables.getOnlyElement(declaredReturnType.getTypeArguments()));
+            DeclaredType declaredReturnType = (DeclaredType) returnType;
+            // TODO(gak): should we allow "covariant return" for set values?
+            if (!declaredReturnType.asElement().equals(getSetElement())) {
+              builder.addItem(PROVIDES_METHOD_SET_VALUES_RETURN_SET, providesMethodElement);
+            } else if (declaredReturnType.getTypeArguments().isEmpty()) {
+              builder.addItem(formatErrorMessage(BINDING_METHOD_SET_VALUES_RAW_SET),
+                  providesMethodElement);
+            } else {
+              validateKeyType(builder,
+                  Iterables.getOnlyElement(declaredReturnType.getTypeArguments()));
+            }
           }
+        } else if (enumValueName.equals("MAP")) {
+          validateKeyType(builder, returnType);
+          ImmutableSet<? extends AnnotationMirror> annotationMirrors =
+              getMapKeys(providesMethodElement);
+          switch (annotationMirrors.size()) {
+            case 0:
+              builder.addItem(formatErrorMessage(BINDING_METHOD_WITH_NO_MAP_KEY),
+                  providesMethodElement);
+              break;
+            case 1:
+              break;
+            default:
+              builder.addItem(formatErrorMessage(BINDING_METHOD_WITH_MULTIPLE_MAP_KEY),
+                  providesMethodElement);
+              break;
+          }
+        } else {
+          throw new IllegalStateException("Unknown provision type: " + enumValueName);
         }
-        break;
-      default:
-        throw new AssertionError();
-    }
+        return null; // Void from visitor.
+      }
+    }, null);
 
     return builder.build();
   }
@@ -179,11 +188,11 @@ final class ProvidesMethodValidator implements Validator<ExecutableElement> {
   }
 
   private String formatErrorMessage(String msg) {
-    return String.format(msg, Provides.class.getSimpleName());
+    return String.format(msg, ClassNames.PROVIDES.simpleName());
   }
 
   private String formatModuleErrorMessage(String msg) {
-    return String.format(msg, Provides.class.getSimpleName(), Module.class.getSimpleName());
+    return String.format(msg, ClassNames.PROVIDES.simpleName(), ClassNames.MODULE.simpleName());
   }
 
   private void validateKeyType(ValidationReport.Builder<? extends Element> reportBuilder,

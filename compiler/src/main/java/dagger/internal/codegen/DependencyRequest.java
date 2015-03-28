@@ -27,8 +27,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import dagger.Lazy;
 import dagger.MembersInjector;
 import dagger.Provides;
-import dagger.producers.Produced;
-import dagger.producers.Producer;
 import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -39,10 +37,11 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import static com.google.auto.common.MoreTypes.isTypeOf;
+
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static dagger.internal.codegen.ClassNames.isTypeOf;
 
 /**
  * Represents a request for a key at an injection point. Parameters to {@link Inject} constructors
@@ -77,13 +76,13 @@ abstract class DependencyRequest {
   abstract Kind kind();
   abstract Key key();
   abstract Element requestElement();
-  
+
   /**
    * Returns the possibly resolved type that contained the requesting element. For members injection
    * requests, this is the type itself.
    */
   abstract DeclaredType enclosingType();
-  
+
   /** Returns true if this request allows null objects. */
   abstract boolean isNullable();
 
@@ -164,7 +163,7 @@ abstract class DependencyRequest {
       DeclaredType container = getEnclosingType(productionMethod);
       // Only a component production method can be a request for a ListenableFuture, so we
       // special-case it here.
-      if (isTypeOf(ListenableFuture.class, type)) {
+      if (isTypeOf(ClassNames.LISTENABLE_FUTURE, type)) {
         return new AutoValue_DependencyRequest(
             Kind.FUTURE,
             keyFactory.forQualifiedType(qualifier,
@@ -232,19 +231,19 @@ abstract class DependencyRequest {
       // represented as a Class).
       if (type.getKind().equals(TypeKind.TYPEVAR)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.INSTANCE, type);
-      } else if (isTypeOf(Provider.class, type)) {
+      } else if (isTypeOf(ClassNames.PROVIDER, type)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.PROVIDER,
             Iterables.getOnlyElement(((DeclaredType) type).getTypeArguments()));
-      } else if (isTypeOf(Lazy.class, type)) {
+      } else if (isTypeOf(ClassNames.LAZY, type)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.LAZY,
             Iterables.getOnlyElement(((DeclaredType) type).getTypeArguments()));
-      } else if (isTypeOf(MembersInjector.class, type)) {
+      } else if (isTypeOf(ClassNames.MEMBERS_INJECTOR, type)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.MEMBERS_INJECTOR,
             Iterables.getOnlyElement(((DeclaredType) type).getTypeArguments()));
-      } else if (isTypeOf(Producer.class, type)) {
+      } else if (isTypeOf(ClassNames.PRODUCER, type)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.PRODUCER,
             Iterables.getOnlyElement(((DeclaredType) type).getTypeArguments()));
-      } else if (isTypeOf(Produced.class, type)) {
+      } else if (isTypeOf(ClassNames.PRODUCED, type)) {
         return new AutoValue_DependencyRequest_Factory_KindAndType(Kind.PRODUCED,
             Iterables.getOnlyElement(((DeclaredType) type).getTypeArguments()));
       } else {

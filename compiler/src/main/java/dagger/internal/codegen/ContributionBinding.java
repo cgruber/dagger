@@ -19,11 +19,15 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
+import dagger.internal.codegen.writer.ClassName;
 import java.util.EnumSet;
 import java.util.Set;
 import javax.inject.Provider;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.util.SimpleAnnotationValueVisitor6;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -46,6 +50,23 @@ abstract class ContributionBinding extends Binding {
 
     boolean isMultibinding() {
       return !this.equals(UNIQUE);
+    }
+
+    static BindingType forEnumAnnotationValue(final AnnotationValue enumConstant) {
+      return enumConstant.accept(new SimpleAnnotationValueVisitor6<BindingType, Void>() {
+        @Override public BindingType visitEnumConstant(VariableElement enumValue, Void p) {
+          String enumValueName = enumValue.getSimpleName().toString();
+          if (enumValueName.equals("UNIQUE")) {
+            return BindingType.UNIQUE;
+          } else if (enumValueName.equals("SET") || enumValueName.equals("SET_VALUES")) {
+            return BindingType.SET;
+          } else if (enumValueName.equals("MAP")) {
+            return BindingType.MAP;
+          } else {
+            throw new IllegalStateException("Unknown production type: " + enumValueName);
+          }
+        }
+      }, null);
     }
   }
 
@@ -74,7 +95,7 @@ abstract class ContributionBinding extends Binding {
    * Returns the framework class associated with this binding, e.g., {@link Provider} for a
    * ProvisionBinding.
    */
-  abstract Class<?> frameworkClass();
+  abstract ClassName frameworkClass();
 
   /**
    * Returns the set of {@link BindingType} enum values implied by a given
