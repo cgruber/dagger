@@ -285,6 +285,7 @@ abstract class Key {
           } else if (enumValueName.equals("SET_VALUES")) {
             // TODO(gak): do we want to allow people to use "covariant return" here?
             checkArgument(keyType.getKind().equals(DECLARED));
+            // TODO(cgruber): This case is not handled in validation, so the compiler throws.
             checkArgument(((DeclaredType) keyType).asElement().equals(getSetElement()));
             return new AutoValue_Key(
                 wrapOptionalInEquivalence(AnnotationMirrors.equivalence(), getQualifier(e)),
@@ -294,7 +295,7 @@ abstract class Key {
           }
         }
         @Override protected AutoValue_Key defaultAction(Object o, Void v) {
-          throw new AssertionError("Produces.type must be an enum constantm, but was " + o);
+          throw new AssertionError("Produces.type must be a known enum constant, but was " + o);
         }
       }, null);
     }
