@@ -222,4 +222,50 @@ public class ProductionComponentProcessorTest {
         .compilesWithoutError()
         .and().generatesSources(generatedComponent);
   }
+
+  @Test public void setBindingsComponent() {
+    JavaFileObject component = JavaFileObjects.forSourceLines("test.TestClass",
+        "package test;",
+        "",
+        "import com.google.common.util.concurrent.ListenableFuture;",
+        "import dagger.Module;",
+        "import dagger.Provides;",
+        "import dagger.producers.ProducerModule;",
+        "import dagger.producers.Produces;",
+        "import dagger.producers.ProductionComponent;",
+        "import javax.inject.Inject;",
+        "",
+        "import static dagger.producers.Produces.Type.SET_VALUES;",
+        "",
+        "final class TestClass {",
+        "  static final class C {",
+        "    @Inject C() {}",
+        "  }",
+        "",
+        "  interface A {}",
+        "  interface B {}",
+        "",
+        "  @Module",
+        "  static final class BModule {",
+        "    @Provides B b(C c) {",
+        "      return null;",
+        "    }",
+        "  }",
+        "",
+        "  @ProducerModule",
+        "  static final class AModule {",
+        "    @Produces(type=SET_VALUES) Set<ListenableFuture<A>> a(C c, Set<B> bs) {",
+        "      return null;",
+        "    }",
+        "  }",
+        "",
+        "  @ProductionComponent(modules = {AModule.class, BModule.class})",
+        "  interface SimpleComponent {",
+        "    ListenableFuture<A> a();",
+        "  }",
+        "}");
+    assertAbout(javaSource()).that(component)
+        .processedWith(new ComponentProcessor())
+        .compilesWithoutError();
+  }
 }
