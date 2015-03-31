@@ -23,12 +23,15 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import dagger.internal.codegen.writer.ClassName;
 import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.SimpleAnnotationValueVisitor6;
 import javax.lang.model.util.Types;
 
 import static com.google.auto.common.AnnotationMirrors.getAnnotationValue;
@@ -51,9 +54,14 @@ abstract class ProductionBinding extends ContributionBinding {
   }
 
   enum Kind {
-    /** Represents a binding configured by {@link Produces} that doesn't return a future. */
+    /**
+     * Represents a binding configured by {@link dagger.producers.Produces} that doesn't
+     * return a future.
+     */
     IMMEDIATE,
-    /** Represents a binding configured by {@link Produces} that returns a future. */
+    /**
+     * Represents a binding configured by {@link dagger.producers.Produces} that returns a future.
+     */
     FUTURE_PRODUCTION,
     /**
      * Represents a binding that is not explicitly tied to code, but generated implicitly by the
@@ -68,13 +76,16 @@ abstract class ProductionBinding extends ContributionBinding {
   }
 
   /**
-   * The type of binding (whether the {@link Produces} method returns a future). For the particular
-   * type of production, use {@link #productionType}.
+   * The type of binding (whether the {@link dagger.producers.Produces} method returns a future).
+   * For the particular type of production, use {@link #productionType}.
    */
   abstract Kind bindingKind();
 
   /** Returns the list of types in the throws clause of the method. */
   abstract ImmutableList<? extends TypeMirror> thrownTypes();
+
+  /** Returns true if the binding represents a "SET_VALUES" style multi-value contribution. */
+  abstract boolean isAggregateSetBinding();
 
   @Override
   boolean isSyntheticBinding() {
@@ -120,18 +131,19 @@ abstract class ProductionBinding extends ContributionBinding {
       Kind kind = MoreTypes.isTypeOf(ListenableFuture.class, producesMethod.getReturnType())
           ? Kind.FUTURE_PRODUCTION
           : Kind.IMMEDIATE;
-
+      AnnotationValue typeEnum = getAnnotationValue(producesAnnotation.get(), "type");
       return new AutoValue_ProductionBinding(
           key,
           producesMethod,
           dependencies,
           findBindingPackage(key),
           false,
-          BindingType.forEnumAnnotationValue(getAnnotationValue(producesAnnotation.get(), "type")),
+          BindingType.forEnumAnnotationValue(typeEnum),
           ConfigurationAnnotations.getNullableType(producesMethod),
           Optional.of(MoreTypes.asTypeElement(declaredContainer)),
           kind,
-          ImmutableList.copyOf(producesMethod.getThrownTypes()));
+          ImmutableList.copyOf(producesMethod.getThrownTypes()),
+          aggregateSetBindingFromAnnotationValue(typeEnum));
     }
 
     ProductionBinding forImplicitMapBinding(DependencyRequest explicitRequest,
@@ -149,7 +161,8 @@ abstract class ProductionBinding extends ContributionBinding {
           Optional.<DeclaredType>absent(),
           Optional.<TypeElement>absent(),
           Kind.SYNTHETIC_PRODUCTION,
-          ImmutableList.<TypeMirror>of());
+          ImmutableList.<TypeMirror>of(),
+          false);
     }
 
     ProductionBinding forComponentMethod(ExecutableElement componentMethod) {
@@ -167,7 +180,17 @@ abstract class ProductionBinding extends ContributionBinding {
           Optional.<DeclaredType>absent(),
           Optional.<TypeElement>absent(),
           Kind.COMPONENT_PRODUCTION,
-          ImmutableList.copyOf(componentMethod.getThrownTypes()));
+          ImmutableList.copyOf(componentMethod.getThrownTypes()),
+          false);
     }
+
+    private boolean aggregateSetBindingFromAnnotationValue(final AnnotationValue enumConstant) {
+      return enumConstant.accept(new SimpleAnnotationValueVisitor6<Boolean, Void>() {
+        @Override public Boolean visitEnumConstant(VariableElement enumValue, Void p) {
+          return enumValue.getSimpleName().toString().equals("SET_VALUES");
+        }
+      }, null);
+    }
+
   }
 }
